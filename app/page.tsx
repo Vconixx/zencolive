@@ -12,7 +12,7 @@ export default function Home() {
         fontWeight: "bold",
       }}
     >
-      ZencoLive 🚀
+      ZencoLive SEKS MAKİNESİDİR
     </main>
   );
 }
