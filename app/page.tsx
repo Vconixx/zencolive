@@ -44,7 +44,7 @@ export default function Home() {
     return;
   }
 
-  setMessages((prev) => [...prev, data as Message]);
+  
   setContent("");
 }
 
