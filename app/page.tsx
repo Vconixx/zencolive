@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 type Message = {
@@ -14,6 +14,7 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [username, setUsername] = useState("Anonim");
   const [content, setContent] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   async function getMessages() {
     const { data, error } = await supabase
@@ -26,27 +27,22 @@ export default function Home() {
     }
   }
 
- async function sendMessage() {
-  if (!content.trim()) return;
+  async function sendMessage() {
+    if (!content.trim()) return;
 
-  const { data, error } = await supabase
-    .from("messages")
-    .insert({
+    const { error } = await supabase.from("messages").insert({
       username: username || "Anonim",
       content: content,
-    })
-    .select()
-    .single();
+    });
 
-  if (error) {
-    alert("Mesaj gönderilemedi: " + error.message);
-    console.error(error);
-    return;
+    if (error) {
+      alert("Mesaj gönderilemedi: " + error.message);
+      console.error(error);
+      return;
+    }
+
+    setContent("");
   }
-
-  
-  setContent("");
-}
 
   useEffect(() => {
     getMessages();
@@ -70,6 +66,12 @@ export default function Home() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
+  }, [messages]);
 
   return (
     <main className="min-h-screen bg-[#313338] text-white flex">
@@ -118,7 +120,7 @@ export default function Home() {
         </div>
       </aside>
 
-      <section className="flex-1 flex flex-col">
+      <section className="flex-1 flex flex-col h-screen">
         <header className="h-14 bg-[#313338] border-b border-[#1e1f22] flex items-center px-6">
           <h2 className="font-bold"># genel-sohbet</h2>
         </header>
@@ -141,6 +143,8 @@ export default function Home() {
               </div>
             </div>
           ))}
+
+          <div ref={messagesEndRef} />
         </div>
 
         <div className="p-5 flex gap-3">
