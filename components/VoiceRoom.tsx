@@ -163,24 +163,38 @@ export default function VoiceRoom({ username }: { username: string }) {
   }
 
   async function toggleScreenShare() {
-    if (!room) return;
+  if (!room) return;
 
-    try {
-      if (!screenSharing) {
-        const publication = await room.localParticipant.setScreenShareEnabled(true);
-        setLocalScreenTrack(publication?.track ?? null);
-        setScreenSharing(true);
-        setStatus("Ekran paylaşımı açık 🖥️");
-      } else {
-        await room.localParticipant.setScreenShareEnabled(false);
-        setLocalScreenTrack(null);
-        setScreenSharing(false);
-        setStatus("Ekran paylaşımı kapalı");
-      }
-    } catch (err: any) {
-      alert("Ekran paylaşımı başlatılamadı: " + err.message);
+  try {
+    if (!screenSharing) {
+      const shareAudio = confirm(
+        "Ekran sesini de paylaşmak istiyor musun?\n\nAçılan Chrome penceresinde 'Sistem sesini paylaş' veya 'Sekme sesini paylaş' kutusu varsa onu da işaretle."
+      );
+
+      const publication = await room.localParticipant.setScreenShareEnabled(
+        true,
+        {
+          audio: shareAudio,
+        }
+      );
+
+      setLocalScreenTrack(publication?.track ?? null);
+      setScreenSharing(true);
+      setStatus(
+        shareAudio
+          ? "Ekran + ses paylaşımı açık 🖥️🔊"
+          : "Ekran paylaşımı açık 🖥️"
+      );
+    } else {
+      await room.localParticipant.setScreenShareEnabled(false);
+      setLocalScreenTrack(null);
+      setScreenSharing(false);
+      setStatus("Ekran paylaşımı kapalı");
     }
+  } catch (err: any) {
+    alert("Ekran paylaşımı başlatılamadı: " + err.message);
   }
+}
 
   function leaveVoiceRoom() {
     if (room) room.disconnect();
