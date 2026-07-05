@@ -14,7 +14,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
 
   async function register() {
-    if (!username || !email || !password) {
+    if (!username.trim() || !email.trim() || !password.trim()) {
       alert("Kullanıcı adı, e-posta ve şifre gerekli.");
       return;
     }
@@ -26,23 +26,37 @@ export default function RegisterPage() {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
-          username,
+          username: username.trim(),
         },
       },
     });
 
-    setLoading(false);
-
     if (error) {
+      setLoading(false);
       alert("Kayıt olunamadı: " + error.message);
       return;
     }
 
+    if (data.user) {
+      const { error: profileError } = await supabase.from("profiles").insert({
+        id: data.user.id,
+        username: username.trim(),
+        avatar_url: null,
+      });
+
+      if (profileError) {
+        setLoading(false);
+        alert("Profil oluşturulamadı: " + profileError.message);
+        return;
+      }
+    }
+
+    setLoading(false);
     alert("Kayıt başarılı. Şimdi giriş yapabilirsin.");
     router.push("/login");
   }
