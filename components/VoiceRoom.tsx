@@ -167,6 +167,13 @@ export default function VoiceRoom({ username }: { username: string }) {
 
     try {
       if (!screenSharing) {
+        const quality = prompt(
+          "Hangi kalitede ekran paylaşmak istiyorsun?\n\n1 = 720p\n2 = 1080p",
+          "1"
+        );
+
+        const is1080p = quality === "2";
+
         const shareAudio = confirm(
           "Ekran sesini de paylaşmak istiyor musun?\n\nChrome penceresinde 'Sistem/Sekme sesini paylaş' kutusu varsa işaretle."
         );
@@ -175,20 +182,26 @@ export default function VoiceRoom({ username }: { username: string }) {
           true,
           {
             audio: shareAudio,
-            resolution: {
-              width: 1920,
-              height: 1080,
-              frameRate: 30,
-            },
+            resolution: is1080p
+              ? {
+                  width: 1920,
+                  height: 1080,
+                  frameRate: 30,
+                }
+              : {
+                  width: 1280,
+                  height: 720,
+                  frameRate: 30,
+                },
           }
         );
 
         setLocalScreenTrack(publication?.track ?? null);
         setScreenSharing(true);
         setStatus(
-          shareAudio
-            ? "1080p ekran + ses paylaşımı açık 🖥️🔊"
-            : "1080p ekran paylaşımı açık 🖥️"
+          `${is1080p ? "1080p" : "720p"} ekran${
+            shareAudio ? " + ses" : ""
+          } paylaşımı açık 🖥️${shareAudio ? "🔊" : ""}`
         );
       } else {
         await room.localParticipant.setScreenShareEnabled(false);
