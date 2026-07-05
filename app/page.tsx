@@ -11,6 +11,7 @@ type Message = {
   content: string;
   created_at: string;
   user_id: string | null;
+  channel_id: string;
 };
 
 type Profile = {
@@ -18,7 +19,15 @@ type Profile = {
   username: string;
   avatar_url: string | null;
   banner_url: string | null;
+  role: string | null;
 };
+
+const textChannels = [
+  { id: "genel", name: "genel-sohbet" },
+  { id: "duyurular", name: "duyurular" },
+  { id: "yardim", name: "yardım" },
+  { id: "oyun", name: "oyun" },
+];
 
 function Avatar({
   username,
@@ -57,8 +66,10 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [currentUserId, setCurrentUserId] = useState("");
+  const [currentRole, setCurrentRole] = useState("user");
   const [username, setUsername] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [activeChannel, setActiveChannel] = useState("genel");
   const [content, setContent] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState("");
@@ -66,11 +77,11 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  function getProfileForMessage(msg: Message) {
-    if (msg.user_id) {
-      return profiles.find((p) => p.id === msg.user_id) || null;
-    }
+  const activeChannelName =
+    textChannels.find((c) => c.id === activeChannel)?.name || "genel-sohbet";
 
+  function getProfileForMessage(msg: Message) {
+    if (msg.user_id) return profiles.find((p) => p.id === msg.user_id) || null;
     return profiles.find((p) => p.username === msg.username) || null;
   }
 
@@ -87,7 +98,7 @@ export default function Home() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("id, username, avatar_url, banner_url")
+        .select("id, username, avatar_url, banner_url, role")
         .eq("id", data.user.id)
         .single();
 
@@ -99,6 +110,7 @@ export default function Home() {
 
       setUsername(name);
       setAvatarUrl(profile?.avatar_url || null);
+      setCurrentRole(profile?.role || "user");
       setLoading(false);
     }
 
@@ -113,7 +125,7 @@ export default function Home() {
   async function getProfiles() {
     const { data } = await supabase
       .from("profiles")
-      .select("id, username, avatar_url, banner_url");
+      .select("id, username, avatar_url, banner_url, role");
 
     if (data) setProfiles(data);
   }
@@ -121,7 +133,8 @@ export default function Home() {
   async function getMessages() {
     const { data, error } = await supabase
       .from("messages")
-      .select("id, username, content, created_at, user_id")
+      .select("id, username, content, created_at, user_id, channel_id")
+      .eq("channel_id", activeChannel)
       .order("created_at", { ascending: true });
 
     if (!error && data) setMessages(data);
@@ -133,6 +146,7 @@ export default function Home() {
     const { error } = await supabase.from("messages").insert({
       username,
       user_id: currentUserId,
+      channel_id: activeChannel,
       content,
     });
 
@@ -144,21 +158,33 @@ export default function Home() {
     setContent("");
   }
 
-  async function deleteMessage(id: number) {
+  async function deleteMessage(msg: Message) {
+    const canDelete = msg.user_id === currentUserId || currentRole === "admin";
+
+    if (!canDelete) {
+      alert("Bu mesajı silme yetkin yok.");
+      return;
+    }
+
     if (!confirm("Bu mesaj silinsin mi?")) return;
 
-    const { error } = await supabase.from("messages").delete().eq("id", id);
+    const { error } = await supabase.from("messages").delete().eq("id", msg.id);
 
     if (error) alert("Mesaj silinemedi: " + error.message);
   }
 
-  async function saveEdit(id: number) {
+  async function saveEdit(msg: Message) {
+    if (msg.user_id !== currentUserId) {
+      alert("Sadece kendi mesajını düzenleyebilirsin.");
+      return;
+    }
+
     if (!editingContent.trim()) return;
 
     const { error } = await supabase
       .from("messages")
       .update({ content: editingContent })
-      .eq("id", id);
+      .eq("id", msg.id);
 
     if (error) {
       alert("Mesaj düzenlenemedi: " + error.message);
@@ -170,6 +196,8 @@ export default function Home() {
   }
 
   function startEdit(msg: Message) {
+    if (msg.user_id !== currentUserId) return;
+
     setEditingId(msg.id);
     setEditingContent(msg.content);
   }
@@ -181,6 +209,9 @@ export default function Home() {
 
   useEffect(() => {
     getMessages();
+  }, [activeChannel]);
+
+  useEffect(() => {
     getProfiles();
 
     const channel = supabase
@@ -190,13 +221,20 @@ export default function Home() {
         { event: "*", schema: "public", table: "messages" },
         (payload: any) => {
           if (payload.eventType === "INSERT") {
-            setMessages((prev) => [...prev, payload.new as Message]);
+            const newMessage = payload.new as Message;
+            if (newMessage.channel_id === activeChannel) {
+              setMessages((prev) => [...prev, newMessage]);
+            }
           }
 
           if (payload.eventType === "UPDATE") {
+            const updatedMessage = payload.new as Message;
+
+            if (updatedMessage.channel_id !== activeChannel) return;
+
             setMessages((prev) =>
               prev.map((msg) =>
-                msg.id === payload.new.id ? (payload.new as Message) : msg
+                msg.id === updatedMessage.id ? updatedMessage : msg
               )
             );
           }
@@ -216,7 +254,7 @@ export default function Home() {
       supabase.removeChannel(channel);
       clearInterval(profileInterval);
     };
-  }, []);
+  }, [activeChannel]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -264,13 +302,22 @@ export default function Home() {
             METİN KANALLARI
           </p>
 
-          {["genel-sohbet", "duyurular", "yardım", "oyun"].map((channel) => (
-            <div
-              key={channel}
-              className="px-3 py-2 rounded bg-[#404249] text-gray-200 cursor-pointer"
+          {textChannels.map((channel) => (
+            <button
+              key={channel.id}
+              onClick={() => {
+                setActiveChannel(channel.id);
+                setEditingId(null);
+                setContent("");
+              }}
+              className={`w-full text-left px-3 py-2 rounded text-gray-200 cursor-pointer ${
+                activeChannel === channel.id
+                  ? "bg-indigo-600"
+                  : "bg-[#404249] hover:bg-[#50525a]"
+              }`}
             >
-              # {channel}
-            </div>
+              # {channel.name}
+            </button>
           ))}
         </div>
 
@@ -282,7 +329,9 @@ export default function Home() {
 
             <div className="flex-1">
               <p className="font-bold text-sm">{username}</p>
-              <p className="text-xs text-green-400">Çevrimiçi</p>
+              <p className="text-xs text-green-400">
+                {currentRole === "admin" ? "Admin" : "Çevrimiçi"}
+              </p>
             </div>
           </div>
 
@@ -297,7 +346,7 @@ export default function Home() {
 
       <section className="flex-1 flex flex-col h-screen">
         <header className="h-14 bg-[#313338] border-b border-[#1e1f22] flex items-center px-6">
-          <h2 className="font-bold"># genel-sohbet</h2>
+          <h2 className="font-bold"># {activeChannelName}</h2>
         </header>
 
         <div className="flex-1 p-6 space-y-5 overflow-y-auto">
@@ -305,6 +354,9 @@ export default function Home() {
             const profile = getProfileForMessage(msg);
             const displayName = profile?.username || msg.username || "Anonim";
             const displayAvatar = profile?.avatar_url || null;
+
+            const canEdit = msg.user_id === currentUserId;
+            const canDelete = msg.user_id === currentUserId || currentRole === "admin";
 
             return (
               <div key={msg.id} className="group flex gap-4">
@@ -325,21 +377,27 @@ export default function Home() {
                       {new Date(msg.created_at).toLocaleString("tr-TR")}
                     </span>
 
-                    <div className="hidden group-hover:flex gap-2 ml-2">
-                      <button
-                        onClick={() => startEdit(msg)}
-                        className="text-xs text-blue-400 hover:underline"
-                      >
-                        Düzenle
-                      </button>
+                    {(canEdit || canDelete) && (
+                      <div className="hidden group-hover:flex gap-2 ml-2">
+                        {canEdit && (
+                          <button
+                            onClick={() => startEdit(msg)}
+                            className="text-xs text-blue-400 hover:underline"
+                          >
+                            Düzenle
+                          </button>
+                        )}
 
-                      <button
-                        onClick={() => deleteMessage(msg.id)}
-                        className="text-xs text-red-400 hover:underline"
-                      >
-                        Sil
-                      </button>
-                    </div>
+                        {canDelete && (
+                          <button
+                            onClick={() => deleteMessage(msg)}
+                            className="text-xs text-red-400 hover:underline"
+                          >
+                            Sil
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {editingId === msg.id ? (
@@ -349,7 +407,7 @@ export default function Home() {
                         value={editingContent}
                         onChange={(e) => setEditingContent(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter") saveEdit(msg.id);
+                          if (e.key === "Enter") saveEdit(msg);
                           if (e.key === "Escape") cancelEdit();
                         }}
                         autoFocus
@@ -357,7 +415,7 @@ export default function Home() {
 
                       <div className="flex gap-2 mt-2">
                         <button
-                          onClick={() => saveEdit(msg.id)}
+                          onClick={() => saveEdit(msg)}
                           className="text-xs bg-green-600 hover:bg-green-700 px-3 py-1 rounded"
                         >
                           Kaydet
@@ -390,7 +448,7 @@ export default function Home() {
             onKeyDown={(e) => {
               if (e.key === "Enter") sendMessage();
             }}
-            placeholder="#genel-sohbet kanalına mesaj gönder..."
+            placeholder={`#${activeChannelName} kanalına mesaj gönder...`}
           />
 
           <button
@@ -430,7 +488,9 @@ export default function Home() {
               </div>
 
               <h2 className="text-2xl font-bold">{selectedProfile.username}</h2>
-              <p className="text-sm text-green-400 mt-1">Çevrimiçi</p>
+              <p className="text-sm text-green-400 mt-1">
+                {selectedProfile.role === "admin" ? "Admin" : "Çevrimiçi"}
+              </p>
 
               <div className="mt-5 bg-[#232428] rounded-xl p-4">
                 <p className="text-xs text-gray-400 font-bold mb-1">
