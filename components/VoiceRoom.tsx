@@ -22,6 +22,10 @@ export default function VoiceRoom({ username }: { username: string }) {
   const [localScreenTrack, setLocalScreenTrack] = useState<LocalTrack | null>(null);
   const [remoteScreenTrack, setRemoteScreenTrack] = useState<RemoteTrack | null>(null);
 
+  const [showScreenModal, setShowScreenModal] = useState(false);
+  const [screenQuality, setScreenQuality] = useState<"720p" | "1080p">("1080p");
+  const [shareScreenAudio, setShareScreenAudio] = useState(true);
+
   const identityRef = useRef(`user-${Math.random().toString(36).slice(2)}`);
   const localScreenVideoRef = useRef<HTMLVideoElement>(null);
   const remoteScreenVideoRef = useRef<HTMLVideoElement>(null);
@@ -45,6 +49,7 @@ export default function VoiceRoom({ username }: { username: string }) {
     if (localScreenTrack && localScreenVideoRef.current) {
       localScreenTrack.attach(localScreenVideoRef.current);
     }
+
     return () => {
       if (localScreenTrack && localScreenVideoRef.current) {
         localScreenTrack.detach(localScreenVideoRef.current);
@@ -56,6 +61,7 @@ export default function VoiceRoom({ username }: { username: string }) {
     if (remoteScreenTrack && remoteScreenVideoRef.current) {
       remoteScreenTrack.attach(remoteScreenVideoRef.current);
     }
+
     return () => {
       if (remoteScreenTrack && remoteScreenVideoRef.current) {
         remoteScreenTrack.detach(remoteScreenVideoRef.current);
@@ -95,6 +101,7 @@ export default function VoiceRoom({ username }: { username: string }) {
       );
 
       const data = await res.json();
+
       if (!data.token || !data.url) {
         throw new Error(data.error || "Token veya URL gelmedi");
       }
@@ -162,56 +169,74 @@ export default function VoiceRoom({ username }: { username: string }) {
     setStatus(newMicState ? "Mikrofon açık 🎤" : "Mikrofon kapalı 🔇");
   }
 
-  async function toggleScreenShare() {
+  function openScreenShareSettings() {
+    if (!room) return;
+
+    if (screenSharing) {
+      stopScreenShare();
+      return;
+    }
+
+    setShowScreenModal(true);
+  }
+
+  async function startScreenShare() {
     if (!room) return;
 
     try {
-      if (!screenSharing) {
-        const quality = prompt(
-          "Hangi kalitede ekran paylaşmak istiyorsun?\n\n1 = 720p\n2 = 1080p",
-          "1"
-        );
+      const is1080p = screenQuality === "1080p";
 
-        const is1080p = quality === "2";
+      const publication = await room.localParticipant.setScreenShareEnabled(
+        true,
+        {
+          audio: shareScreenAudio,
+          resolution: is1080p
+            ? {
+                width: 1920,
+                height: 1080,
+                frameRate: 30,
+              }
+            : {
+                width: 1280,
+                height: 720,
+                frameRate: 30,
+              },
+        },
+        {
+          videoEncoding: is1080p
+            ? {
+                maxBitrate: 8_000_000,
+                maxFramerate: 30,
+              }
+            : {
+                maxBitrate: 4_000_000,
+                maxFramerate: 30,
+              },
+          simulcast: false,
+        } as any
+      );
 
-        const shareAudio = confirm(
-          "Ekran sesini de paylaşmak istiyor musun?\n\nChrome penceresinde 'Sistem/Sekme sesini paylaş' kutusu varsa işaretle."
-        );
+      setLocalScreenTrack(publication?.track ?? null);
+      setScreenSharing(true);
+      setShowScreenModal(false);
 
-        const publication = await room.localParticipant.setScreenShareEnabled(
-          true,
-          {
-            audio: shareAudio,
-            resolution: is1080p
-              ? {
-                  width: 1920,
-                  height: 1080,
-                  frameRate: 30,
-                }
-              : {
-                  width: 1280,
-                  height: 720,
-                  frameRate: 30,
-                },
-          }
-        );
-
-        setLocalScreenTrack(publication?.track ?? null);
-        setScreenSharing(true);
-        setStatus(
-          `${is1080p ? "1080p" : "720p"} ekran${
-            shareAudio ? " + ses" : ""
-          } paylaşımı açık 🖥️${shareAudio ? "🔊" : ""}`
-        );
-      } else {
-        await room.localParticipant.setScreenShareEnabled(false);
-        setLocalScreenTrack(null);
-        setScreenSharing(false);
-        setStatus("Ekran paylaşımı kapalı");
-      }
+      setStatus(
+        `${screenQuality} ekran${shareScreenAudio ? " + ses" : ""} paylaşımı açık 🖥️${
+          shareScreenAudio ? "🔊" : ""
+        }`
+      );
     } catch (err: any) {
       alert("Ekran paylaşımı başlatılamadı: " + err.message);
     }
+  }
+
+  async function stopScreenShare() {
+    if (!room) return;
+
+    await room.localParticipant.setScreenShareEnabled(false);
+    setLocalScreenTrack(null);
+    setScreenSharing(false);
+    setStatus("Ekran paylaşımı kapalı");
   }
 
   function leaveVoiceRoom() {
@@ -275,7 +300,7 @@ export default function VoiceRoom({ username }: { username: string }) {
           </button>
 
           <button
-            onClick={toggleScreenShare}
+            onClick={openScreenShareSettings}
             className={`w-full rounded px-3 py-2 text-sm font-bold ${
               screenSharing
                 ? "bg-red-600 hover:bg-red-700"
@@ -297,7 +322,9 @@ export default function VoiceRoom({ username }: { username: string }) {
       {screenSharing && (
         <div className="mt-4 bg-[#111214] rounded-xl overflow-hidden border border-purple-600">
           <div className="flex items-center justify-between px-3 py-2 bg-[#232428]">
-            <p className="text-xs text-white">🖥️ Sen ekran paylaşıyorsun</p>
+            <p className="text-xs text-white">
+              🖥️ Sen ekran paylaşıyorsun ({screenQuality})
+            </p>
 
             <div className="flex gap-2">
               <button
@@ -308,7 +335,7 @@ export default function VoiceRoom({ username }: { username: string }) {
               </button>
 
               <button
-                onClick={toggleScreenShare}
+                onClick={stopScreenShare}
                 className="text-xs bg-red-600 hover:bg-red-700 px-2 py-1 rounded"
               >
                 Durdur
@@ -345,6 +372,79 @@ export default function VoiceRoom({ username }: { username: string }) {
             playsInline
             className="w-full bg-black aspect-video"
           />
+        </div>
+      )}
+
+      {showScreenModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-xl bg-[#1e1f22] border border-[#404249] shadow-2xl">
+            <div className="px-5 py-4 border-b border-[#313338]">
+              <h2 className="text-lg font-bold text-white">
+                Ekran Paylaşımı Ayarları
+              </h2>
+              <p className="text-sm text-gray-400 mt-1">
+                Yayın kalitesini ve ses paylaşımını seç.
+              </p>
+            </div>
+
+            <div className="p-5 space-y-3">
+              <label className="flex items-center gap-3 bg-[#2b2d31] hover:bg-[#35373d] p-3 rounded-lg cursor-pointer">
+                <input
+                  type="radio"
+                  name="screenQuality"
+                  checked={screenQuality === "720p"}
+                  onChange={() => setScreenQuality("720p")}
+                />
+                <div>
+                  <p className="font-bold text-white">720p</p>
+                  <p className="text-xs text-gray-400">Daha akıcı, düşük internet için iyi.</p>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-3 bg-[#2b2d31] hover:bg-[#35373d] p-3 rounded-lg cursor-pointer">
+                <input
+                  type="radio"
+                  name="screenQuality"
+                  checked={screenQuality === "1080p"}
+                  onChange={() => setScreenQuality("1080p")}
+                />
+                <div>
+                  <p className="font-bold text-white">1080p</p>
+                  <p className="text-xs text-gray-400">Daha net görüntü, daha fazla internet ister.</p>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-3 bg-[#2b2d31] hover:bg-[#35373d] p-3 rounded-lg cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={shareScreenAudio}
+                  onChange={(e) => setShareScreenAudio(e.target.checked)}
+                />
+                <div>
+                  <p className="font-bold text-white">Ekran sesini paylaş</p>
+                  <p className="text-xs text-gray-400">
+                    Chrome penceresinde ses kutusu çıkarsa onu da işaretle.
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            <div className="px-5 py-4 border-t border-[#313338] flex justify-end gap-2">
+              <button
+                onClick={() => setShowScreenModal(false)}
+                className="px-4 py-2 rounded bg-[#404249] hover:bg-[#50535a] text-sm font-bold"
+              >
+                İptal
+              </button>
+
+              <button
+                onClick={startScreenShare}
+                className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-700 text-sm font-bold"
+              >
+                Yayını Başlat
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
