@@ -22,8 +22,10 @@ export default function VoiceRoom({ username }: { username: string }) {
   const [localScreenTrack, setLocalScreenTrack] = useState<LocalTrack | null>(null);
   const [remoteScreenTrack, setRemoteScreenTrack] = useState<RemoteTrack | null>(null);
 
+  const identityRef = useRef(`user-${Math.random().toString(36).slice(2)}`);
   const localScreenVideoRef = useRef<HTMLVideoElement>(null);
   const remoteScreenVideoRef = useRef<HTMLVideoElement>(null);
+  const audioElementsRef = useRef<HTMLAudioElement[]>([]);
 
   useEffect(() => {
     if (localScreenTrack && localScreenVideoRef.current) {
@@ -49,13 +51,48 @@ export default function VoiceRoom({ username }: { username: string }) {
     };
   }, [remoteScreenTrack]);
 
+  function addParticipantName(name: string) {
+    setParticipants((prev) => (prev.includes(name) ? prev : [...prev, name]));
+  }
+
+  function removeParticipantName(name: string) {
+    setParticipants((prev) => prev.filter((p) => p !== name));
+  }
+
+  function playRemoteAudio(track: RemoteTrack) {
+    if (track.kind !== Track.Kind.Audio) return;
+
+    const audioElement = track.attach() as HTMLAudioElement;
+    audioElement.autoplay = true;
+    audioElement.style.display = "none";
+
+    document.body.appendChild(audioElement);
+    audioElementsRef.current.push(audioElement);
+
+    audioElement.play().catch((err) => {
+      console.error("Ses oynatma hatası:", err);
+    });
+  }
+
+  function removeRemoteAudio(track: RemoteTrack) {
+    if (track.kind !== Track.Kind.Audio) return;
+
+    track.detach().forEach((element) => element.remove());
+    audioElementsRef.current = audioElementsRef.current.filter((el) =>
+      document.body.contains(el)
+    );
+  }
+
   async function joinVoiceRoom() {
     try {
       setStatus("Ses odasına bağlanılıyor...");
-      const name = username.trim() || "Anonim";
+
+      const displayName = username.trim() || "Anonim";
 
       const res = await fetch(
-        `/api/livekit-token?room=genel-ses&username=${encodeURIComponent(name)}`
+        `/api/livekit-token?room=genel-ses&username=${encodeURIComponent(
+          displayName
+        )}&identity=${encodeURIComponent(identityRef.current)}`
       );
 
       const data = await res.json();
@@ -67,17 +104,11 @@ export default function VoiceRoom({ username }: { username: string }) {
       const newRoom = new Room();
 
       newRoom.on(RoomEvent.ParticipantConnected, (participant) => {
-        setParticipants((prev) =>
-          prev.includes(participant.identity)
-            ? prev
-            : [...prev, participant.identity]
-        );
+        addParticipantName(participant.name || participant.identity);
       });
 
       newRoom.on(RoomEvent.ParticipantDisconnected, (participant) => {
-        setParticipants((prev) =>
-          prev.filter((p) => p !== participant.identity)
-        );
+        removeParticipantName(participant.name || participant.identity);
       });
 
       newRoom.on(
@@ -89,7 +120,12 @@ export default function VoiceRoom({ username }: { username: string }) {
         ) => {
           if (publication.source === Track.Source.ScreenShare) {
             setRemoteScreenTrack(track);
-            setScreenOwner(participant.identity);
+            setScreenOwner(participant.name || participant.identity);
+            return;
+          }
+
+          if (track.kind === Track.Kind.Audio) {
+            playRemoteAudio(track);
           }
         }
       );
@@ -100,11 +136,18 @@ export default function VoiceRoom({ username }: { username: string }) {
           if (publication.source === Track.Source.ScreenShare) {
             setRemoteScreenTrack(null);
             setScreenOwner("");
+            return;
+          }
+
+          if (track.kind === Track.Kind.Audio) {
+            removeRemoteAudio(track);
           }
         }
       );
 
       await newRoom.connect(data.url, data.token);
+
+      await newRoom.startAudio();
       await newRoom.localParticipant.setMicrophoneEnabled(true);
 
       setRoom(newRoom);
@@ -114,11 +157,12 @@ export default function VoiceRoom({ username }: { username: string }) {
       setStatus("Genel Ses odasındasın 🎤");
 
       const remoteNames = Array.from(newRoom.remoteParticipants.values()).map(
-        (p) => p.identity
+        (p) => p.name || p.identity
       );
 
-      setParticipants([name, ...remoteNames]);
+      setParticipants([displayName, ...remoteNames]);
     } catch (err: any) {
+      console.error(err);
       alert("Ses odasına girilemedi: " + err.message);
       setStatus("Bağlantı hatası");
     }
@@ -140,13 +184,11 @@ export default function VoiceRoom({ username }: { username: string }) {
     try {
       if (!screenSharing) {
         const publication = await room.localParticipant.setScreenShareEnabled(true);
-
         setLocalScreenTrack(publication?.track ?? null);
         setScreenSharing(true);
         setStatus("Ekran paylaşımı açık 🖥️");
       } else {
         await room.localParticipant.setScreenShareEnabled(false);
-
         setLocalScreenTrack(null);
         setScreenSharing(false);
         setStatus("Ekran paylaşımı kapalı");
@@ -158,6 +200,9 @@ export default function VoiceRoom({ username }: { username: string }) {
 
   function leaveVoiceRoom() {
     if (room) room.disconnect();
+
+    audioElementsRef.current.forEach((element) => element.remove());
+    audioElementsRef.current = [];
 
     setRoom(null);
     setJoined(false);
@@ -238,7 +283,9 @@ export default function VoiceRoom({ username }: { username: string }) {
 
               <div className="flex gap-2">
                 <button
-                  onClick={() => localScreenVideoRef.current?.requestFullscreen()}
+                  onClick={() =>
+                    localScreenVideoRef.current?.requestFullscreen()
+                  }
                   className="text-xs bg-[#404249] hover:bg-[#50535a] px-3 py-2 rounded"
                 >
                   Tam ekran
@@ -268,10 +315,14 @@ export default function VoiceRoom({ username }: { username: string }) {
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6">
           <div className="w-[90vw] max-w-6xl bg-[#1e1f22] rounded-xl overflow-hidden border border-indigo-600">
             <div className="flex items-center justify-between px-4 py-3 bg-[#232428]">
-              <p className="text-sm text-white">🖥️ {screenOwner} ekran paylaşıyor</p>
+              <p className="text-sm text-white">
+                🖥️ {screenOwner} ekran paylaşıyor
+              </p>
 
               <button
-                onClick={() => remoteScreenVideoRef.current?.requestFullscreen()}
+                onClick={() =>
+                  remoteScreenVideoRef.current?.requestFullscreen()
+                }
                 className="text-xs bg-[#404249] hover:bg-[#50535a] px-3 py-2 rounded"
               >
                 Tam ekran
