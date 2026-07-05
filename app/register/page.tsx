@@ -5,17 +5,26 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 
+function usernameToAuthEmail(username: string) {
+  return `${username.trim().toLowerCase()}@zencolive.local`;
+}
+
 export default function RegisterPage() {
   const router = useRouter();
 
   const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function register() {
-    if (!username.trim() || !email.trim() || !password.trim()) {
-      alert("Kullanıcı adı, e-posta ve şifre gerekli.");
+    if (!username.trim() || !password.trim()) {
+      alert("Kullanıcı adı ve şifre gerekli.");
+      return;
+    }
+
+    if (username.trim().length < 3) {
+      alert("Kullanıcı adı en az 3 karakter olmalı.");
       return;
     }
 
@@ -26,12 +35,25 @@ export default function RegisterPage() {
 
     setLoading(true);
 
+    const { data: existingProfile } = await supabase
+      .from("profiles")
+      .select("id")
+      .ilike("username", username.trim())
+      .maybeSingle();
+
+    if (existingProfile) {
+      setLoading(false);
+      alert("Bu kullanıcı adı zaten alınmış.");
+      return;
+    }
+
     const { error } = await supabase.auth.signUp({
-      email: email.trim(),
+      email: usernameToAuthEmail(username),
       password,
       options: {
         data: {
           username: username.trim(),
+          contact_email: contactEmail.trim() || null,
         },
       },
     });
@@ -43,7 +65,7 @@ export default function RegisterPage() {
       return;
     }
 
-    alert("Kayıt başarılı. Şimdi giriş yapabilirsin.");
+    alert("Kayıt başarılı. Kullanıcı adınla giriş yapabilirsin.");
     router.push("/login");
   }
 
@@ -68,10 +90,10 @@ export default function RegisterPage() {
 
           <input
             className="w-full bg-[#383a40] rounded-xl px-4 py-3 outline-none"
-            placeholder="E-posta"
+            placeholder="E-posta isteğe bağlı"
             type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={contactEmail}
+            onChange={(e) => setContactEmail(e.target.value)}
           />
 
           <input

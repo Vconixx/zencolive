@@ -5,31 +5,35 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 
+function usernameToAuthEmail(username: string) {
+  return `${username.trim().toLowerCase()}@zencolive.local`;
+}
+
 export default function LoginPage() {
   const router = useRouter();
 
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
 
   async function login() {
-    if (!email || !password) {
-      alert("E-posta ve şifre gerekli.");
+    if (!username.trim() || !password.trim()) {
+      alert("Kullanıcı adı ve şifre gerekli.");
       return;
     }
 
     setLoading(true);
 
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: usernameToAuthEmail(username),
       password,
     });
 
     setLoading(false);
 
     if (error) {
-      alert("Giriş yapılamadı: " + error.message);
+      alert("Giriş yapılamadı: Kullanıcı adı veya şifre hatalı.");
       return;
     }
 
@@ -50,16 +54,15 @@ export default function LoginPage() {
             Z
           </div>
           <h1 className="text-3xl font-bold mt-4">ZencoLive</h1>
-          <p className="text-gray-400 mt-2">Hesabına giriş yap</p>
+          <p className="text-gray-400 mt-2">Kullanıcı adınla giriş yap</p>
         </div>
 
         <div className="space-y-4">
           <input
             className="w-full bg-[#383a40] rounded-xl px-4 py-3 outline-none"
-            placeholder="E-posta"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Kullanıcı adı"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
           />
 
           <input
