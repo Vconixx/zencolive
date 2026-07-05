@@ -163,38 +163,43 @@ export default function VoiceRoom({ username }: { username: string }) {
   }
 
   async function toggleScreenShare() {
-  if (!room) return;
+    if (!room) return;
 
-  try {
-    if (!screenSharing) {
-      const shareAudio = confirm(
-        "Ekran sesini de paylaşmak istiyor musun?\n\nAçılan Chrome penceresinde 'Sistem sesini paylaş' veya 'Sekme sesini paylaş' kutusu varsa onu da işaretle."
-      );
+    try {
+      if (!screenSharing) {
+        const shareAudio = confirm(
+          "Ekran sesini de paylaşmak istiyor musun?\n\nChrome penceresinde 'Sistem/Sekme sesini paylaş' kutusu varsa işaretle."
+        );
 
-      const publication = await room.localParticipant.setScreenShareEnabled(
-        true,
-        {
-          audio: shareAudio,
-        }
-      );
+        const publication = await room.localParticipant.setScreenShareEnabled(
+          true,
+          {
+            audio: shareAudio,
+            resolution: {
+              width: 1920,
+              height: 1080,
+              frameRate: 30,
+            },
+          }
+        );
 
-      setLocalScreenTrack(publication?.track ?? null);
-      setScreenSharing(true);
-      setStatus(
-        shareAudio
-          ? "Ekran + ses paylaşımı açık 🖥️🔊"
-          : "Ekran paylaşımı açık 🖥️"
-      );
-    } else {
-      await room.localParticipant.setScreenShareEnabled(false);
-      setLocalScreenTrack(null);
-      setScreenSharing(false);
-      setStatus("Ekran paylaşımı kapalı");
+        setLocalScreenTrack(publication?.track ?? null);
+        setScreenSharing(true);
+        setStatus(
+          shareAudio
+            ? "1080p ekran + ses paylaşımı açık 🖥️🔊"
+            : "1080p ekran paylaşımı açık 🖥️"
+        );
+      } else {
+        await room.localParticipant.setScreenShareEnabled(false);
+        setLocalScreenTrack(null);
+        setScreenSharing(false);
+        setStatus("Ekran paylaşımı kapalı");
+      }
+    } catch (err: any) {
+      alert("Ekran paylaşımı başlatılamadı: " + err.message);
     }
-  } catch (err: any) {
-    alert("Ekran paylaşımı başlatılamadı: " + err.message);
   }
-}
 
   function leaveVoiceRoom() {
     if (room) room.disconnect();
