@@ -106,7 +106,17 @@ export default function VoiceRoom({ username }: { username: string }) {
         throw new Error(data.error || "Token veya URL gelmedi");
       }
 
-      const newRoom = new Room();
+      const newRoom = new Room({
+        adaptiveStream: false,
+        dynacast: false,
+        publishDefaults: {
+          simulcast: false,
+          screenShareEncoding: {
+            maxBitrate: 20_000_000,
+            maxFramerate: 30,
+          },
+        },
+      } as any);
 
       newRoom.on(RoomEvent.ParticipantConnected, fetchVoiceParticipants);
       newRoom.on(RoomEvent.ParticipantDisconnected, fetchVoiceParticipants);
@@ -191,27 +201,13 @@ export default function VoiceRoom({ username }: { username: string }) {
         {
           audio: shareScreenAudio,
           resolution: is1080p
-            ? {
-                width: 1920,
-                height: 1080,
-                frameRate: 30,
-              }
-            : {
-                width: 1280,
-                height: 720,
-                frameRate: 30,
-              },
+            ? { width: 1920, height: 1080, frameRate: 30 }
+            : { width: 1280, height: 720, frameRate: 30 },
         },
         {
           videoEncoding: is1080p
-            ? {
-                maxBitrate: 8_000_000,
-                maxFramerate: 30,
-              }
-            : {
-                maxBitrate: 4_000_000,
-                maxFramerate: 30,
-              },
+            ? { maxBitrate: 20_000_000, maxFramerate: 30 }
+            : { maxBitrate: 8_000_000, maxFramerate: 30 },
           simulcast: false,
         } as any
       );
@@ -221,9 +217,9 @@ export default function VoiceRoom({ username }: { username: string }) {
       setShowScreenModal(false);
 
       setStatus(
-        `${screenQuality} ekran${shareScreenAudio ? " + ses" : ""} paylaşımı açık 🖥️${
-          shareScreenAudio ? "🔊" : ""
-        }`
+        `${screenQuality} yüksek bitrate ekran${
+          shareScreenAudio ? " + ses" : ""
+        } paylaşımı açık 🖥️${shareScreenAudio ? "🔊" : ""}`
       );
     } catch (err: any) {
       alert("Ekran paylaşımı başlatılamadı: " + err.message);
@@ -397,7 +393,9 @@ export default function VoiceRoom({ username }: { username: string }) {
                 />
                 <div>
                   <p className="font-bold text-white">720p</p>
-                  <p className="text-xs text-gray-400">Daha akıcı, düşük internet için iyi.</p>
+                  <p className="text-xs text-gray-400">
+                    1280x720 - 8 Mbps
+                  </p>
                 </div>
               </label>
 
@@ -410,7 +408,9 @@ export default function VoiceRoom({ username }: { username: string }) {
                 />
                 <div>
                   <p className="font-bold text-white">1080p</p>
-                  <p className="text-xs text-gray-400">Daha net görüntü, daha fazla internet ister.</p>
+                  <p className="text-xs text-gray-400">
+                    1920x1080 - 20 Mbps yüksek kalite
+                  </p>
                 </div>
               </label>
 
