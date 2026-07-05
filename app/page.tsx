@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import VoiceRoom from "../components/VoiceRoom";
 
@@ -12,12 +13,41 @@ type Message = {
 };
 
 export default function Home() {
+  const router = useRouter();
+
   const [messages, setMessages] = useState<Message[]>([]);
-  const [username, setUsername] = useState("Anonim");
+  const [username, setUsername] = useState("");
   const [content, setContent] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState("");
+  const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    async function checkUser() {
+      const { data } = await supabase.auth.getUser();
+
+      if (!data.user) {
+        router.push("/login");
+        return;
+      }
+
+      const name =
+        data.user.user_metadata?.username ||
+        data.user.email?.split("@")[0] ||
+        "Kullanıcı";
+
+      setUsername(name);
+      setLoading(false);
+    }
+
+    checkUser();
+  }, [router]);
+
+  async function logout() {
+    await supabase.auth.signOut();
+    router.push("/login");
+  }
 
   async function getMessages() {
     const { data, error } = await supabase
@@ -32,7 +62,7 @@ export default function Home() {
     if (!content.trim()) return;
 
     const { error } = await supabase.from("messages").insert({
-      username: username || "Anonim",
+      username,
       content,
     });
 
@@ -45,15 +75,11 @@ export default function Home() {
   }
 
   async function deleteMessage(id: number) {
-    const ok = confirm("Bu mesaj silinsin mi?");
-    if (!ok) return;
+    if (!confirm("Bu mesaj silinsin mi?")) return;
 
     const { error } = await supabase.from("messages").delete().eq("id", id);
 
-    if (error) {
-      alert("Mesaj silinemedi: " + error.message);
-      return;
-    }
+    if (error) alert("Mesaj silinemedi: " + error.message);
   }
 
   async function saveEdit(id: number) {
@@ -122,6 +148,14 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-[#313338] text-white flex items-center justify-center">
+        <p>Yükleniyor...</p>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#313338] text-white flex">
       <aside className="w-20 bg-[#1e1f22] flex flex-col items-center py-4 gap-4">
@@ -162,12 +196,23 @@ export default function Home() {
         <VoiceRoom username={username} />
 
         <div className="mt-auto bg-[#232428] p-3 rounded">
-          <input
-            className="w-full bg-[#383a40] rounded px-3 py-2 text-sm outline-none"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Kullanıcı adın"
-          />
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center font-bold">
+              {username[0]?.toUpperCase()}
+            </div>
+
+            <div className="flex-1">
+              <p className="font-bold text-sm">{username}</p>
+              <p className="text-xs text-green-400">Çevrimiçi</p>
+            </div>
+          </div>
+
+          <button
+            onClick={logout}
+            className="mt-3 w-full bg-red-600 hover:bg-red-700 rounded px-3 py-2 text-sm font-bold"
+          >
+            Çıkış Yap
+          </button>
         </div>
       </aside>
 
