@@ -6,7 +6,7 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 
 function usernameToAuthEmail(username: string) {
-  return `${username.trim().toLowerCase()}@zencolive.local`;
+  return `${username.trim().toLowerCase()}@zencolive.com`;
 }
 
 export default function RegisterPage() {

@@ -12,16 +12,60 @@ type Message = {
   created_at: string;
 };
 
+type Profile = {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+};
+
+function Avatar({
+  username,
+  avatarUrl,
+  size = "md",
+}: {
+  username: string;
+  avatarUrl?: string | null;
+  size?: "sm" | "md" | "lg";
+}) {
+  const sizeClass =
+    size === "sm" ? "w-9 h-9" : size === "lg" ? "w-12 h-12" : "w-11 h-11";
+
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={username}
+        className={`${sizeClass} rounded-full object-cover bg-indigo-600`}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={`${sizeClass} rounded-full bg-gradient-to-br from-indigo-500 to-purple-700 flex items-center justify-center font-bold`}
+    >
+      {username[0]?.toUpperCase() || "Z"}
+    </div>
+  );
+}
+
 export default function Home() {
   const router = useRouter();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [username, setUsername] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [content, setContent] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState("");
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  function getAvatarForUsername(name: string) {
+    const profile = profiles.find((p) => p.username === name);
+    return profile?.avatar_url || null;
+  }
 
   useEffect(() => {
     async function checkUser() {
@@ -32,12 +76,20 @@ export default function Home() {
         return;
       }
 
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("username, avatar_url")
+        .eq("id", data.user.id)
+        .single();
+
       const name =
+        profile?.username ||
         data.user.user_metadata?.username ||
         data.user.email?.split("@")[0] ||
         "Kullanıcı";
 
       setUsername(name);
+      setAvatarUrl(profile?.avatar_url || null);
       setLoading(false);
     }
 
@@ -47,6 +99,14 @@ export default function Home() {
   async function logout() {
     await supabase.auth.signOut();
     router.push("/login");
+  }
+
+  async function getProfiles() {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, username, avatar_url");
+
+    if (data) setProfiles(data);
   }
 
   async function getMessages() {
@@ -111,6 +171,7 @@ export default function Home() {
 
   useEffect(() => {
     getMessages();
+    getProfiles();
 
     const channel = supabase
       .channel("messages-channel")
@@ -139,8 +200,11 @@ export default function Home() {
       )
       .subscribe();
 
+    const profileInterval = setInterval(getProfiles, 5000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(profileInterval);
     };
   }, []);
 
@@ -163,7 +227,7 @@ export default function Home() {
           Z
         </div>
 
-        {["🎮", "🎧", "💬", "⚙️"].map((icon) => (
+        {["🎮", "🎧", "💬"].map((icon) => (
           <div
             key={icon}
             className="w-12 h-12 rounded-full bg-[#313338] hover:rounded-2xl hover:bg-indigo-600 transition-all flex items-center justify-center text-xl cursor-pointer"
@@ -171,6 +235,13 @@ export default function Home() {
             {icon}
           </div>
         ))}
+
+        <button
+          onClick={() => router.push("/settings")}
+          className="w-12 h-12 rounded-full bg-[#313338] hover:rounded-2xl hover:bg-indigo-600 transition-all flex items-center justify-center text-xl cursor-pointer"
+        >
+          ⚙️
+        </button>
       </aside>
 
       <aside className="w-64 bg-[#2b2d31] p-4 flex flex-col">
@@ -197,9 +268,7 @@ export default function Home() {
 
         <div className="mt-auto bg-[#232428] p-3 rounded">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center font-bold">
-              {username[0]?.toUpperCase()}
-            </div>
+            <Avatar username={username} avatarUrl={avatarUrl} size="sm" />
 
             <div className="flex-1">
               <p className="font-bold text-sm">{username}</p>
@@ -224,9 +293,10 @@ export default function Home() {
         <div className="flex-1 p-6 space-y-5 overflow-y-auto">
           {messages.map((msg) => (
             <div key={msg.id} className="group flex gap-4">
-              <div className="w-11 h-11 rounded-full bg-indigo-600 flex items-center justify-center font-bold">
-                {msg.username[0]?.toUpperCase()}
-              </div>
+              <Avatar
+                username={msg.username}
+                avatarUrl={getAvatarForUsername(msg.username)}
+              />
 
               <div className="flex-1">
                 <div className="flex items-center gap-2">

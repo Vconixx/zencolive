@@ -5,10 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 
-function usernameToAuthEmail(username: string) {
-  return `${username.trim().toLowerCase()}@zencolive.local`;
-}
-
 export default function LoginPage() {
   const router = useRouter();
 
@@ -25,15 +21,27 @@ export default function LoginPage() {
 
     setLoading(true);
 
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("email")
+      .ilike("username", username.trim())
+      .maybeSingle();
+
+    if (profileError || !profile?.email) {
+      setLoading(false);
+      alert("Böyle bir kullanıcı bulunamadı.");
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
-      email: usernameToAuthEmail(username),
+      email: profile.email,
       password,
     });
 
     setLoading(false);
 
     if (error) {
-      alert("Giriş yapılamadı: Kullanıcı adı veya şifre hatalı.");
+      alert("Şifre hatalı.");
       return;
     }
 
@@ -53,6 +61,7 @@ export default function LoginPage() {
           <div className="mx-auto w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center text-3xl font-bold">
             Z
           </div>
+
           <h1 className="text-3xl font-bold mt-4">ZencoLive</h1>
           <p className="text-gray-400 mt-2">Kullanıcı adınla giriş yap</p>
         </div>
