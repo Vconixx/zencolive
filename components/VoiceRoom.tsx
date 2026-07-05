@@ -27,6 +27,29 @@ export default function VoiceRoom({ username }: { username: string }) {
   const remoteScreenVideoRef = useRef<HTMLVideoElement>(null);
   const audioElementsRef = useRef<HTMLAudioElement[]>([]);
 
+  async function fetchVoiceParticipants() {
+    try {
+      const res = await fetch("/api/livekit-participants");
+      const data = await res.json();
+
+      if (Array.isArray(data.participants)) {
+        setParticipants(data.participants);
+      }
+    } catch {
+      // sessiz geç
+    }
+  }
+
+  useEffect(() => {
+    fetchVoiceParticipants();
+
+    const interval = setInterval(() => {
+      fetchVoiceParticipants();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     if (localScreenTrack && localScreenVideoRef.current) {
       localScreenTrack.attach(localScreenVideoRef.current);
@@ -51,14 +74,6 @@ export default function VoiceRoom({ username }: { username: string }) {
     };
   }, [remoteScreenTrack]);
 
-  function addParticipantName(name: string) {
-    setParticipants((prev) => (prev.includes(name) ? prev : [...prev, name]));
-  }
-
-  function removeParticipantName(name: string) {
-    setParticipants((prev) => prev.filter((p) => p !== name));
-  }
-
   function playRemoteAudio(track: RemoteTrack) {
     if (track.kind !== Track.Kind.Audio) return;
 
@@ -69,9 +84,7 @@ export default function VoiceRoom({ username }: { username: string }) {
     document.body.appendChild(audioElement);
     audioElementsRef.current.push(audioElement);
 
-    audioElement.play().catch((err) => {
-      console.error("Ses oynatma hatası:", err);
-    });
+    audioElement.play().catch(console.error);
   }
 
   function removeRemoteAudio(track: RemoteTrack) {
@@ -103,12 +116,12 @@ export default function VoiceRoom({ username }: { username: string }) {
 
       const newRoom = new Room();
 
-      newRoom.on(RoomEvent.ParticipantConnected, (participant) => {
-        addParticipantName(participant.name || participant.identity);
+      newRoom.on(RoomEvent.ParticipantConnected, () => {
+        fetchVoiceParticipants();
       });
 
-      newRoom.on(RoomEvent.ParticipantDisconnected, (participant) => {
-        removeParticipantName(participant.name || participant.identity);
+      newRoom.on(RoomEvent.ParticipantDisconnected, () => {
+        fetchVoiceParticipants();
       });
 
       newRoom.on(
@@ -146,7 +159,6 @@ export default function VoiceRoom({ username }: { username: string }) {
       );
 
       await newRoom.connect(data.url, data.token);
-
       await newRoom.startAudio();
       await newRoom.localParticipant.setMicrophoneEnabled(true);
 
@@ -156,11 +168,7 @@ export default function VoiceRoom({ username }: { username: string }) {
       setScreenSharing(false);
       setStatus("Genel Ses odasındasın 🎤");
 
-      const remoteNames = Array.from(newRoom.remoteParticipants.values()).map(
-        (p) => p.name || p.identity
-      );
-
-      setParticipants([displayName, ...remoteNames]);
+      fetchVoiceParticipants();
     } catch (err: any) {
       console.error(err);
       alert("Ses odasına girilemedi: " + err.message);
@@ -208,11 +216,12 @@ export default function VoiceRoom({ username }: { username: string }) {
     setJoined(false);
     setMicEnabled(true);
     setScreenSharing(false);
-    setParticipants([]);
     setScreenOwner("");
     setLocalScreenTrack(null);
     setRemoteScreenTrack(null);
     setStatus("Ses odasından çıktın");
+
+    setTimeout(fetchVoiceParticipants, 1000);
   }
 
   return (
@@ -223,7 +232,7 @@ export default function VoiceRoom({ username }: { username: string }) {
         🔊 Genel Ses
       </div>
 
-      {participants.length > 0 && (
+      {participants.length > 0 ? (
         <div className="mt-2 ml-3 space-y-1">
           {participants.map((name) => (
             <div key={name} className="text-sm text-gray-300">
@@ -231,6 +240,8 @@ export default function VoiceRoom({ username }: { username: string }) {
             </div>
           ))}
         </div>
+      ) : (
+        <p className="mt-2 ml-3 text-xs text-gray-500">Odada kimse yok</p>
       )}
 
       <p className="text-xs text-gray-400 mt-3">{status}</p>
