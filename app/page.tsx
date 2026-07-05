@@ -10,12 +10,14 @@ type Message = {
   username: string;
   content: string;
   created_at: string;
+  user_id: string | null;
 };
 
 type Profile = {
   id: string;
   username: string;
   avatar_url: string | null;
+  banner_url: string | null;
 };
 
 function Avatar({
@@ -28,21 +30,21 @@ function Avatar({
   size?: "sm" | "md" | "lg";
 }) {
   const sizeClass =
-    size === "sm" ? "w-9 h-9" : size === "lg" ? "w-12 h-12" : "w-11 h-11";
+    size === "sm" ? "w-9 h-9" : size === "lg" ? "w-16 h-16" : "w-11 h-11";
 
   if (avatarUrl) {
     return (
       <img
         src={avatarUrl}
         alt={username}
-        className={`${sizeClass} rounded-full object-cover bg-indigo-600`}
+        className={`${sizeClass} rounded-full object-cover bg-indigo-600 cursor-pointer`}
       />
     );
   }
 
   return (
     <div
-      className={`${sizeClass} rounded-full bg-gradient-to-br from-indigo-500 to-purple-700 flex items-center justify-center font-bold`}
+      className={`${sizeClass} rounded-full bg-gradient-to-br from-indigo-500 to-purple-700 flex items-center justify-center font-bold cursor-pointer`}
     >
       {username[0]?.toUpperCase() || "Z"}
     </div>
@@ -53,18 +55,23 @@ export default function Home() {
   const router = useRouter();
 
   const [messages, setMessages] = useState<Message[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [currentUserId, setCurrentUserId] = useState("");
   const [username, setUsername] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [content, setContent] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState("");
+  const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  function getAvatarForUsername(name: string) {
-    const profile = profiles.find((p) => p.username === name);
-    return profile?.avatar_url || null;
+  function getProfileForMessage(msg: Message) {
+    if (msg.user_id) {
+      return profiles.find((p) => p.id === msg.user_id) || null;
+    }
+
+    return profiles.find((p) => p.username === msg.username) || null;
   }
 
   useEffect(() => {
@@ -76,9 +83,11 @@ export default function Home() {
         return;
       }
 
+      setCurrentUserId(data.user.id);
+
       const { data: profile } = await supabase
         .from("profiles")
-        .select("username, avatar_url")
+        .select("id, username, avatar_url, banner_url")
         .eq("id", data.user.id)
         .single();
 
@@ -104,7 +113,7 @@ export default function Home() {
   async function getProfiles() {
     const { data } = await supabase
       .from("profiles")
-      .select("id, username, avatar_url");
+      .select("id, username, avatar_url, banner_url");
 
     if (data) setProfiles(data);
   }
@@ -112,7 +121,7 @@ export default function Home() {
   async function getMessages() {
     const { data, error } = await supabase
       .from("messages")
-      .select("*")
+      .select("id, username, content, created_at, user_id")
       .order("created_at", { ascending: true });
 
     if (!error && data) setMessages(data);
@@ -123,6 +132,7 @@ export default function Home() {
 
     const { error } = await supabase.from("messages").insert({
       username,
+      user_id: currentUserId,
       content,
     });
 
@@ -200,7 +210,7 @@ export default function Home() {
       )
       .subscribe();
 
-    const profileInterval = setInterval(getProfiles, 5000);
+    const profileInterval = setInterval(getProfiles, 3000);
 
     return () => {
       supabase.removeChannel(channel);
@@ -238,7 +248,7 @@ export default function Home() {
 
         <button
           onClick={() => router.push("/settings")}
-          className="w-12 h-12 rounded-full bg-[#313338] hover:rounded-2xl hover:bg-indigo-600 transition-all flex items-center justify-center text-xl cursor-pointer"
+          className="w-12 h-12 rounded-full bg-[#313338] hover:rounded-2xl hover:bg-indigo-600 transition-all flex items-center justify-center text-xl"
         >
           ⚙️
         </button>
@@ -291,74 +301,83 @@ export default function Home() {
         </header>
 
         <div className="flex-1 p-6 space-y-5 overflow-y-auto">
-          {messages.map((msg) => (
-            <div key={msg.id} className="group flex gap-4">
-              <Avatar
-                username={msg.username}
-                avatarUrl={getAvatarForUsername(msg.username)}
-              />
+          {messages.map((msg) => {
+            const profile = getProfileForMessage(msg);
+            const displayName = profile?.username || msg.username || "Anonim";
+            const displayAvatar = profile?.avatar_url || null;
 
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-bold">
-                    {msg.username}{" "}
+            return (
+              <div key={msg.id} className="group flex gap-4">
+                <div onClick={() => profile && setSelectedProfile(profile)}>
+                  <Avatar username={displayName} avatarUrl={displayAvatar} />
+                </div>
+
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => profile && setSelectedProfile(profile)}
+                      className="font-bold hover:underline"
+                    >
+                      {displayName}
+                    </button>
+
                     <span className="text-xs text-gray-400">
                       {new Date(msg.created_at).toLocaleString("tr-TR")}
                     </span>
-                  </p>
 
-                  <div className="hidden group-hover:flex gap-2 ml-2">
-                    <button
-                      onClick={() => startEdit(msg)}
-                      className="text-xs text-blue-400 hover:underline"
-                    >
-                      Düzenle
-                    </button>
-
-                    <button
-                      onClick={() => deleteMessage(msg.id)}
-                      className="text-xs text-red-400 hover:underline"
-                    >
-                      Sil
-                    </button>
-                  </div>
-                </div>
-
-                {editingId === msg.id ? (
-                  <div className="mt-2">
-                    <input
-                      className="w-full bg-[#383a40] rounded px-3 py-2 text-white outline-none"
-                      value={editingContent}
-                      onChange={(e) => setEditingContent(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") saveEdit(msg.id);
-                        if (e.key === "Escape") cancelEdit();
-                      }}
-                      autoFocus
-                    />
-
-                    <div className="flex gap-2 mt-2">
+                    <div className="hidden group-hover:flex gap-2 ml-2">
                       <button
-                        onClick={() => saveEdit(msg.id)}
-                        className="text-xs bg-green-600 hover:bg-green-700 px-3 py-1 rounded"
+                        onClick={() => startEdit(msg)}
+                        className="text-xs text-blue-400 hover:underline"
                       >
-                        Kaydet
+                        Düzenle
                       </button>
 
                       <button
-                        onClick={cancelEdit}
-                        className="text-xs bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded"
+                        onClick={() => deleteMessage(msg.id)}
+                        className="text-xs text-red-400 hover:underline"
                       >
-                        İptal
+                        Sil
                       </button>
                     </div>
                   </div>
-                ) : (
-                  <p className="text-gray-300">{msg.content}</p>
-                )}
+
+                  {editingId === msg.id ? (
+                    <div className="mt-2">
+                      <input
+                        className="w-full bg-[#383a40] rounded px-3 py-2 text-white outline-none"
+                        value={editingContent}
+                        onChange={(e) => setEditingContent(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveEdit(msg.id);
+                          if (e.key === "Escape") cancelEdit();
+                        }}
+                        autoFocus
+                      />
+
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          onClick={() => saveEdit(msg.id)}
+                          className="text-xs bg-green-600 hover:bg-green-700 px-3 py-1 rounded"
+                        >
+                          Kaydet
+                        </button>
+
+                        <button
+                          onClick={cancelEdit}
+                          className="text-xs bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded"
+                        >
+                          İptal
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-gray-300">{msg.content}</p>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           <div ref={messagesEndRef} />
         </div>
@@ -382,6 +401,56 @@ export default function Home() {
           </button>
         </div>
       </section>
+
+      {selectedProfile && (
+        <div
+          onClick={() => setSelectedProfile(null)}
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm bg-[#2b2d31] rounded-2xl overflow-hidden border border-[#404249] shadow-2xl"
+          >
+            <div
+              className="h-32 bg-gradient-to-r from-indigo-600 to-purple-700 bg-cover bg-center"
+              style={
+                selectedProfile.banner_url
+                  ? { backgroundImage: `url(${selectedProfile.banner_url})` }
+                  : undefined
+              }
+            />
+
+            <div className="p-5">
+              <div className="-mt-14 mb-4">
+                <Avatar
+                  username={selectedProfile.username}
+                  avatarUrl={selectedProfile.avatar_url}
+                  size="lg"
+                />
+              </div>
+
+              <h2 className="text-2xl font-bold">{selectedProfile.username}</h2>
+              <p className="text-sm text-green-400 mt-1">Çevrimiçi</p>
+
+              <div className="mt-5 bg-[#232428] rounded-xl p-4">
+                <p className="text-xs text-gray-400 font-bold mb-1">
+                  ZENCOLIVE PROFİLİ
+                </p>
+                <p className="text-sm text-gray-300">
+                  Henüz hakkında bilgisi yok.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setSelectedProfile(null)}
+                className="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 rounded-xl py-2 font-bold"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
