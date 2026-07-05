@@ -31,22 +31,13 @@ export default function VoiceRoom({ username }: { username: string }) {
     try {
       const res = await fetch("/api/livekit-participants");
       const data = await res.json();
-
-      if (Array.isArray(data.participants)) {
-        setParticipants(data.participants);
-      }
-    } catch {
-      // sessiz geç
-    }
+      if (Array.isArray(data.participants)) setParticipants(data.participants);
+    } catch {}
   }
 
   useEffect(() => {
     fetchVoiceParticipants();
-
-    const interval = setInterval(() => {
-      fetchVoiceParticipants();
-    }, 5000);
-
+    const interval = setInterval(fetchVoiceParticipants, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -54,7 +45,6 @@ export default function VoiceRoom({ username }: { username: string }) {
     if (localScreenTrack && localScreenVideoRef.current) {
       localScreenTrack.attach(localScreenVideoRef.current);
     }
-
     return () => {
       if (localScreenTrack && localScreenVideoRef.current) {
         localScreenTrack.detach(localScreenVideoRef.current);
@@ -66,7 +56,6 @@ export default function VoiceRoom({ username }: { username: string }) {
     if (remoteScreenTrack && remoteScreenVideoRef.current) {
       remoteScreenTrack.attach(remoteScreenVideoRef.current);
     }
-
     return () => {
       if (remoteScreenTrack && remoteScreenVideoRef.current) {
         remoteScreenTrack.detach(remoteScreenVideoRef.current);
@@ -80,10 +69,8 @@ export default function VoiceRoom({ username }: { username: string }) {
     const audioElement = track.attach() as HTMLAudioElement;
     audioElement.autoplay = true;
     audioElement.style.display = "none";
-
     document.body.appendChild(audioElement);
     audioElementsRef.current.push(audioElement);
-
     audioElement.play().catch(console.error);
   }
 
@@ -99,7 +86,6 @@ export default function VoiceRoom({ username }: { username: string }) {
   async function joinVoiceRoom() {
     try {
       setStatus("Ses odasına bağlanılıyor...");
-
       const displayName = username.trim() || "Anonim";
 
       const res = await fetch(
@@ -109,20 +95,14 @@ export default function VoiceRoom({ username }: { username: string }) {
       );
 
       const data = await res.json();
-
       if (!data.token || !data.url) {
         throw new Error(data.error || "Token veya URL gelmedi");
       }
 
       const newRoom = new Room();
 
-      newRoom.on(RoomEvent.ParticipantConnected, () => {
-        fetchVoiceParticipants();
-      });
-
-      newRoom.on(RoomEvent.ParticipantDisconnected, () => {
-        fetchVoiceParticipants();
-      });
+      newRoom.on(RoomEvent.ParticipantConnected, fetchVoiceParticipants);
+      newRoom.on(RoomEvent.ParticipantDisconnected, fetchVoiceParticipants);
 
       newRoom.on(
         RoomEvent.TrackSubscribed,
@@ -137,9 +117,7 @@ export default function VoiceRoom({ username }: { username: string }) {
             return;
           }
 
-          if (track.kind === Track.Kind.Audio) {
-            playRemoteAudio(track);
-          }
+          if (track.kind === Track.Kind.Audio) playRemoteAudio(track);
         }
       );
 
@@ -152,9 +130,7 @@ export default function VoiceRoom({ username }: { username: string }) {
             return;
           }
 
-          if (track.kind === Track.Kind.Audio) {
-            removeRemoteAudio(track);
-          }
+          if (track.kind === Track.Kind.Audio) removeRemoteAudio(track);
         }
       );
 
@@ -287,66 +263,56 @@ export default function VoiceRoom({ username }: { username: string }) {
       )}
 
       {screenSharing && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6">
-          <div className="w-[90vw] max-w-6xl bg-[#1e1f22] rounded-xl overflow-hidden border border-purple-600">
-            <div className="flex items-center justify-between px-4 py-3 bg-[#232428]">
-              <p className="text-sm text-white">🖥️ Sen ekran paylaşıyorsun</p>
+        <div className="mt-4 bg-[#111214] rounded-xl overflow-hidden border border-purple-600">
+          <div className="flex items-center justify-between px-3 py-2 bg-[#232428]">
+            <p className="text-xs text-white">🖥️ Sen ekran paylaşıyorsun</p>
 
-              <div className="flex gap-2">
-                <button
-                  onClick={() =>
-                    localScreenVideoRef.current?.requestFullscreen()
-                  }
-                  className="text-xs bg-[#404249] hover:bg-[#50535a] px-3 py-2 rounded"
-                >
-                  Tam ekran
-                </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => localScreenVideoRef.current?.requestFullscreen()}
+                className="text-xs bg-[#404249] hover:bg-[#50535a] px-2 py-1 rounded"
+              >
+                Tam ekran
+              </button>
 
-                <button
-                  onClick={toggleScreenShare}
-                  className="text-xs bg-red-600 hover:bg-red-700 px-3 py-2 rounded"
-                >
-                  Durdur
-                </button>
-              </div>
+              <button
+                onClick={toggleScreenShare}
+                className="text-xs bg-red-600 hover:bg-red-700 px-2 py-1 rounded"
+              >
+                Durdur
+              </button>
             </div>
-
-            <video
-              ref={localScreenVideoRef}
-              autoPlay
-              muted
-              playsInline
-              className="w-full bg-black aspect-video"
-            />
           </div>
+
+          <video
+            ref={localScreenVideoRef}
+            autoPlay
+            muted
+            playsInline
+            className="w-full bg-black aspect-video"
+          />
         </div>
       )}
 
       {screenOwner && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6">
-          <div className="w-[90vw] max-w-6xl bg-[#1e1f22] rounded-xl overflow-hidden border border-indigo-600">
-            <div className="flex items-center justify-between px-4 py-3 bg-[#232428]">
-              <p className="text-sm text-white">
-                🖥️ {screenOwner} ekran paylaşıyor
-              </p>
+        <div className="mt-4 bg-[#111214] rounded-xl overflow-hidden border border-indigo-600">
+          <div className="flex items-center justify-between px-3 py-2 bg-[#232428]">
+            <p className="text-xs text-white">🖥️ {screenOwner} ekran paylaşıyor</p>
 
-              <button
-                onClick={() =>
-                  remoteScreenVideoRef.current?.requestFullscreen()
-                }
-                className="text-xs bg-[#404249] hover:bg-[#50535a] px-3 py-2 rounded"
-              >
-                Tam ekran
-              </button>
-            </div>
-
-            <video
-              ref={remoteScreenVideoRef}
-              autoPlay
-              playsInline
-              className="w-full bg-black aspect-video"
-            />
+            <button
+              onClick={() => remoteScreenVideoRef.current?.requestFullscreen()}
+              className="text-xs bg-[#404249] hover:bg-[#50535a] px-2 py-1 rounded"
+            >
+              Tam ekran
+            </button>
           </div>
+
+          <video
+            ref={remoteScreenVideoRef}
+            autoPlay
+            playsInline
+            className="w-full bg-black aspect-video"
+          />
         </div>
       )}
     </div>
