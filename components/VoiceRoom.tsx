@@ -58,9 +58,7 @@ export default function VoiceRoom({ username }: { username: string }) {
           const data = await res.json();
 
           result[channel.id] = {
-            participants: Array.isArray(data.participants)
-              ? data.participants
-              : [],
+            participants: Array.isArray(data.participants) ? data.participants : [],
             screenSharing: Boolean(data.screenSharing),
             screenOwner: data.screenOwner || "",
           };
@@ -145,7 +143,6 @@ export default function VoiceRoom({ username }: { username: string }) {
       }
 
       cleanupRoom();
-
       setStatus(`${channelName} kanalına bağlanılıyor...`);
 
       const displayName = username.trim() || "Anonim";
@@ -358,44 +355,50 @@ export default function VoiceRoom({ username }: { username: string }) {
       <p className="text-xs text-gray-400 mt-3">{status}</p>
 
       {joined && (
-        <div className="mt-3 space-y-2">
-          {(screenSharing || remoteScreenTrack) && (
+        <div className="mt-3 bg-[#232428] rounded-xl p-2 border border-[#3b3d44]">
+          <div className="flex items-center justify-between gap-2">
             <button
-              onClick={() => setStreamOpen(true)}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-2 text-sm font-bold"
+              onClick={toggleMicrophone}
+              title={micEnabled ? "Mikrofonu kapat" : "Mikrofonu aç"}
+              className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-all hover:scale-105 ${
+                micEnabled
+                  ? "bg-[#383a40] hover:bg-yellow-600"
+                  : "bg-blue-600 hover:bg-blue-700"
+              }`}
             >
-              🖥️ Yayını Aç
+              {micEnabled ? "🎤" : "🔇"}
             </button>
-          )}
 
-          <button
-            onClick={toggleMicrophone}
-            className={`w-full rounded-lg px-3 py-2 text-sm font-bold transition-all duration-200 hover:scale-[1.02] ${
-              micEnabled
-                ? "bg-yellow-600 hover:bg-yellow-700"
-                : "bg-blue-600 hover:bg-blue-700"
-            }`}
-          >
-            {micEnabled ? "🎤 Mikrofonu Kapat" : "🔇 Mikrofonu Aç"}
-          </button>
+            <button
+              onClick={openScreenShareSettings}
+              title={screenSharing ? "Paylaşımı durdur" : "Ekranı paylaş"}
+              className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-all hover:scale-105 ${
+                screenSharing
+                  ? "bg-red-600 hover:bg-red-700"
+                  : "bg-[#383a40] hover:bg-purple-600"
+              }`}
+            >
+              {screenSharing ? "⛔" : "🖥️"}
+            </button>
 
-          <button
-            onClick={openScreenShareSettings}
-            className={`w-full rounded-lg px-3 py-2 text-sm font-bold transition-all duration-200 hover:scale-[1.02] ${
-              screenSharing
-                ? "bg-red-600 hover:bg-red-700"
-                : "bg-purple-600 hover:bg-purple-700"
-            }`}
-          >
-            {screenSharing ? "⛔ Paylaşımı Durdur" : "🖥️ Ekranı Paylaş"}
-          </button>
+            {(screenSharing || remoteScreenTrack) && (
+              <button
+                onClick={() => setStreamOpen(true)}
+                title="Yayını aç"
+                className="w-10 h-10 rounded-lg bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center text-lg transition-all hover:scale-105"
+              >
+                👁️
+              </button>
+            )}
 
-          <button
-            onClick={leaveVoiceRoom}
-            className="w-full bg-red-600 hover:bg-red-700 rounded-lg px-3 py-2 text-sm font-bold"
-          >
-            Odadan Çık
-          </button>
+            <button
+              onClick={leaveVoiceRoom}
+              title="Odadan çık"
+              className="w-10 h-10 rounded-lg bg-red-600 hover:bg-red-700 flex items-center justify-center text-lg transition-all hover:scale-105"
+            >
+              📞
+            </button>
+          </div>
         </div>
       )}
 

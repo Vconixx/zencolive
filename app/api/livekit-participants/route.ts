@@ -19,7 +19,13 @@ export async function GET(req: NextRequest) {
     const names = participants.map((p) => p.name || p.identity);
 
     const screenUser = participants.find((p: any) =>
-      p.tracks?.some((t: any) => t.source === 2 || t.source === "SCREEN_SHARE")
+      p.tracks?.some((t: any) => {
+        return (
+          t.source === 3 ||
+          t.source === "SCREEN_SHARE" ||
+          t.source === "screen_share"
+        );
+      })
     );
 
     return NextResponse.json({
