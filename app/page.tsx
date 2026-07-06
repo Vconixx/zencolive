@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import ServerSidebar from "../components/ServerSidebar";
 import ChannelSidebar from "../components/ChannelSidebar";
+import CreateServerModal from "../components/CreateServerModal";
 
 type Message = {
   id: number;
@@ -86,7 +87,10 @@ export default function Home() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState("");
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
+
   const [loading, setLoading] = useState(true);
+  const [createServerOpen, setCreateServerOpen] = useState(false);
+  const [createServerLoading, setCreateServerLoading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -157,6 +161,46 @@ export default function Home() {
   useEffect(() => {
     if (currentUserId) getServers();
   }, [currentUserId]);
+
+  async function createServer(serverName: string) {
+    if (!currentUserId) return;
+
+    setCreateServerLoading(true);
+
+    const { data: serverData, error: serverError } = await supabase
+      .from("servers")
+      .insert({
+        name: serverName,
+        owner_id: currentUserId,
+        icon_url: null,
+      })
+      .select("id, name, owner_id, icon_url")
+      .single();
+
+    if (serverError || !serverData) {
+      setCreateServerLoading(false);
+      alert("Sunucu oluşturulamadı: " + serverError?.message);
+      return;
+    }
+
+    const { error: memberError } = await supabase.from("server_members").insert({
+      server_id: serverData.id,
+      user_id: currentUserId,
+      role: "owner",
+    });
+
+    if (memberError) {
+      setCreateServerLoading(false);
+      alert("Sunucu üyeliği oluşturulamadı: " + memberError.message);
+      return;
+    }
+
+    setServers((prev) => [...prev, serverData]);
+    setActiveServerId(serverData.id);
+    setActiveChannel("genel");
+    setCreateServerOpen(false);
+    setCreateServerLoading(false);
+  }
 
   async function logout() {
     await supabase.auth.signOut();
@@ -350,9 +394,7 @@ export default function Home() {
             setEditingId(null);
             setContent("");
           }}
-          onCreateServer={() =>
-            alert("Sunucu oluşturma sistemi sıradaki adımda gelecek.")
-          }
+          onCreateServer={() => setCreateServerOpen(true)}
           onOpenSettings={() => router.push("/settings")}
         />
 
@@ -547,6 +589,13 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        <CreateServerModal
+          open={createServerOpen}
+          loading={createServerLoading}
+          onClose={() => setCreateServerOpen(false)}
+          onCreate={createServer}
+        />
       </main>
     </>
   );
