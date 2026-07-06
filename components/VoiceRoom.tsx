@@ -11,13 +11,21 @@ import {
   LocalTrack,
 } from "livekit-client";
 
+const voiceChannels = [
+  { id: "genel-ses", name: "Genel Ses" },
+  { id: "lol", name: "LoL" },
+  { id: "cs2", name: "CS2" },
+  { id: "muzik", name: "Müzik" },
+];
+
 export default function VoiceRoom({ username }: { username: string }) {
   const [room, setRoom] = useState<Room | null>(null);
   const [joined, setJoined] = useState(false);
+  const [activeVoiceChannel, setActiveVoiceChannel] = useState("");
   const [micEnabled, setMicEnabled] = useState(true);
   const [screenSharing, setScreenSharing] = useState(false);
-  const [status, setStatus] = useState("Ses odasına katılmadın");
-  const [participants, setParticipants] = useState<string[]>([]);
+  const [status, setStatus] = useState("Ses kanalına katılmadın");
+  const [participants, setParticipants] = useState<Record<string, string[]>>({});
   const [screenOwner, setScreenOwner] = useState("");
   const [localScreenTrack, setLocalScreenTrack] = useState<LocalTrack | null>(null);
   const [remoteScreenTrack, setRemoteScreenTrack] = useState<RemoteTrack | null>(null);
@@ -33,9 +41,19 @@ export default function VoiceRoom({ username }: { username: string }) {
 
   async function fetchVoiceParticipants() {
     try {
-      const res = await fetch("/api/livekit-participants");
-      const data = await res.json();
-      if (Array.isArray(data.participants)) setParticipants(data.participants);
+      const all: Record<string, string[]> = {};
+
+      await Promise.all(
+        voiceChannels.map(async (channel) => {
+          const res = await fetch(`/api/livekit-participants?room=${channel.id}`);
+          const data = await res.json();
+          all[channel.id] = Array.isArray(data.participants)
+            ? data.participants
+            : [];
+        })
+      );
+
+      setParticipants(all);
     } catch {}
   }
 
@@ -89,13 +107,33 @@ export default function VoiceRoom({ username }: { username: string }) {
     );
   }
 
-  async function joinVoiceRoom() {
+  function cleanupRoom() {
+    if (room) room.disconnect();
+
+    audioElementsRef.current.forEach((element) => element.remove());
+    audioElementsRef.current = [];
+
+    setRoom(null);
+    setJoined(false);
+    setMicEnabled(true);
+    setScreenSharing(false);
+    setScreenOwner("");
+    setLocalScreenTrack(null);
+    setRemoteScreenTrack(null);
+  }
+
+  async function joinVoiceChannel(channelId: string, channelName: string) {
     try {
-      setStatus("Ses odasına bağlanılıyor...");
+      if (activeVoiceChannel === channelId && joined) return;
+
+      cleanupRoom();
+
+      setStatus(`${channelName} kanalına bağlanılıyor...`);
+
       const displayName = username.trim() || "Anonim";
 
       const res = await fetch(
-        `/api/livekit-token?room=genel-ses&username=${encodeURIComponent(
+        `/api/livekit-token?room=${channelId}&username=${encodeURIComponent(
           displayName
         )}&identity=${encodeURIComponent(identityRef.current)}`
       );
@@ -159,12 +197,13 @@ export default function VoiceRoom({ username }: { username: string }) {
       setJoined(true);
       setMicEnabled(true);
       setScreenSharing(false);
-      setStatus("Genel Ses odasındasın 🎤");
+      setActiveVoiceChannel(channelId);
+      setStatus(`${channelName} kanalındasın 🎤`);
 
-      fetchVoiceParticipants();
+      setTimeout(fetchVoiceParticipants, 1000);
     } catch (err: any) {
       console.error(err);
-      alert("Ses odasına girilemedi: " + err.message);
+      alert("Ses kanalına girilemedi: " + err.message);
       setStatus("Bağlantı hatası");
     }
   }
@@ -217,9 +256,7 @@ export default function VoiceRoom({ username }: { username: string }) {
       setShowScreenModal(false);
 
       setStatus(
-        `${screenQuality} yüksek bitrate ekran${
-          shareScreenAudio ? " + ses" : ""
-        } paylaşımı açık 🖥️${shareScreenAudio ? "🔊" : ""}`
+        `${screenQuality} ekran${shareScreenAudio ? " + ses" : ""} paylaşımı açık 🖥️`
       );
     } catch (err: any) {
       alert("Ekran paylaşımı başlatılamadı: " + err.message);
@@ -236,20 +273,9 @@ export default function VoiceRoom({ username }: { username: string }) {
   }
 
   function leaveVoiceRoom() {
-    if (room) room.disconnect();
-
-    audioElementsRef.current.forEach((element) => element.remove());
-    audioElementsRef.current = [];
-
-    setRoom(null);
-    setJoined(false);
-    setMicEnabled(true);
-    setScreenSharing(false);
-    setScreenOwner("");
-    setLocalScreenTrack(null);
-    setRemoteScreenTrack(null);
-    setStatus("Ses odasından çıktın");
-
+    cleanupRoom();
+    setActiveVoiceChannel("");
+    setStatus("Ses kanalından çıktın");
     setTimeout(fetchVoiceParticipants, 1000);
   }
 
@@ -257,36 +283,47 @@ export default function VoiceRoom({ username }: { username: string }) {
     <div className="mt-6">
       <p className="text-xs text-gray-400 font-bold mb-2">SES KANALLARI</p>
 
-      <div className="px-3 py-2 rounded bg-[#404249] text-gray-200">
-        🔊 Genel Ses
-      </div>
+      <div className="space-y-1">
+        {voiceChannels.map((channel) => {
+          const names = participants[channel.id] || [];
+          const isActive = activeVoiceChannel === channel.id;
 
-      {participants.length > 0 ? (
-        <div className="mt-2 ml-3 space-y-1">
-          {participants.map((name) => (
-            <div key={name} className="text-sm text-gray-300">
-              🎤 {name}
+          return (
+            <div key={channel.id}>
+              <button
+                onClick={() => joinVoiceChannel(channel.id, channel.name)}
+                className={`w-full text-left px-3 py-2 rounded-lg text-gray-200 transition-all duration-200 ${
+                  isActive
+                    ? "bg-green-700 shadow-lg shadow-green-900/30 translate-x-1"
+                    : "bg-[#404249] hover:bg-[#50525a] hover:translate-x-1"
+                }`}
+              >
+                🔊 {channel.name}
+              </button>
+
+              {names.length > 0 ? (
+                <div className="mt-1 mb-2 ml-4 space-y-1">
+                  {names.map((name) => (
+                    <div key={`${channel.id}-${name}`} className="text-sm text-gray-300">
+                      🎤 {name}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-1 mb-2 ml-4 text-xs text-gray-500">Odada kimse yok</p>
+              )}
             </div>
-          ))}
-        </div>
-      ) : (
-        <p className="mt-2 ml-3 text-xs text-gray-500">Odada kimse yok</p>
-      )}
+          );
+        })}
+      </div>
 
       <p className="text-xs text-gray-400 mt-3">{status}</p>
 
-      {!joined ? (
-        <button
-          onClick={joinVoiceRoom}
-          className="mt-3 w-full bg-green-600 hover:bg-green-700 rounded px-3 py-2 text-sm font-bold"
-        >
-          Ses Odasına Katıl
-        </button>
-      ) : (
+      {joined && (
         <div className="mt-3 space-y-2">
           <button
             onClick={toggleMicrophone}
-            className={`w-full rounded px-3 py-2 text-sm font-bold ${
+            className={`w-full rounded-lg px-3 py-2 text-sm font-bold transition-all duration-200 hover:scale-[1.02] ${
               micEnabled
                 ? "bg-yellow-600 hover:bg-yellow-700"
                 : "bg-blue-600 hover:bg-blue-700"
@@ -297,7 +334,7 @@ export default function VoiceRoom({ username }: { username: string }) {
 
           <button
             onClick={openScreenShareSettings}
-            className={`w-full rounded px-3 py-2 text-sm font-bold ${
+            className={`w-full rounded-lg px-3 py-2 text-sm font-bold transition-all duration-200 hover:scale-[1.02] ${
               screenSharing
                 ? "bg-red-600 hover:bg-red-700"
                 : "bg-purple-600 hover:bg-purple-700"
@@ -308,7 +345,7 @@ export default function VoiceRoom({ username }: { username: string }) {
 
           <button
             onClick={leaveVoiceRoom}
-            className="w-full bg-red-600 hover:bg-red-700 rounded px-3 py-2 text-sm font-bold"
+            className="w-full bg-red-600 hover:bg-red-700 rounded-lg px-3 py-2 text-sm font-bold transition-all duration-200 hover:scale-[1.02]"
           >
             Odadan Çık
           </button>
@@ -393,9 +430,7 @@ export default function VoiceRoom({ username }: { username: string }) {
                 />
                 <div>
                   <p className="font-bold text-white">720p</p>
-                  <p className="text-xs text-gray-400">
-                    1280x720 - 8 Mbps
-                  </p>
+                  <p className="text-xs text-gray-400">1280x720 - 8 Mbps</p>
                 </div>
               </label>
 
