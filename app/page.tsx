@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import VoiceRoom from "../components/VoiceRoom";
+import ServerSidebar from "../components/ServerSidebar";
 
 type Message = {
   id: number;
@@ -340,63 +341,20 @@ export default function Home() {
       `}</style>
 
       <main className="min-h-screen bg-[#313338] text-white flex">
-        <aside className="w-20 bg-[#1e1f22] flex flex-col items-center py-4 gap-3 border-r border-black/20">
-          {servers.length > 0 ? (
-            servers.map((server) => {
-              const isActive = server.id === activeServerId;
-
-              return (
-                <button
-                  key={server.id}
-                  onClick={() => {
-                    setActiveServerId(server.id);
-                    setActiveChannel("genel");
-                    setEditingId(null);
-                    setContent("");
-                  }}
-                  title={server.name}
-                  className={`w-12 h-12 flex items-center justify-center font-bold text-xl transition-all duration-200 overflow-hidden ${
-                    isActive
-                      ? "rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-900/40"
-                      : "rounded-full bg-[#313338] hover:rounded-2xl hover:bg-indigo-600 hover:scale-105"
-                  }`}
-                >
-                  {server.icon_url ? (
-                    <img
-                      src={server.icon_url}
-                      alt={server.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    server.name[0]?.toUpperCase() || "Z"
-                  )}
-                </button>
-              );
-            })
-          ) : (
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-700 flex items-center justify-center font-bold text-xl shadow-lg shadow-indigo-900/40">
-              Z
-            </div>
-          )}
-
-          <div className="w-10 h-[2px] bg-[#313338] rounded-full my-1" />
-
-          <button
-            onClick={() => alert("Sunucu oluşturma sistemi sıradaki adımda gelecek.")}
-            title="Sunucu oluştur"
-            className="w-12 h-12 rounded-full bg-[#313338] hover:rounded-2xl hover:bg-green-600 transition-all duration-200 flex items-center justify-center text-2xl hover:scale-105"
-          >
-            +
-          </button>
-
-          <button
-            onClick={() => router.push("/settings")}
-            title="Ayarlar"
-            className="w-12 h-12 rounded-full bg-[#313338] hover:rounded-2xl hover:bg-indigo-600 transition-all duration-200 flex items-center justify-center text-xl hover:scale-105 mt-auto"
-          >
-            ⚙️
-          </button>
-        </aside>
+        <ServerSidebar
+  servers={servers}
+  activeServerId={activeServerId}
+  onSelectServer={(serverId) => {
+    setActiveServerId(serverId);
+    setActiveChannel("genel");
+    setEditingId(null);
+    setContent("");
+  }}
+  onCreateServer={() =>
+    alert("Sunucu oluşturma sistemi sıradaki adımda gelecek.")
+  }
+  onOpenSettings={() => router.push("/settings")}
+/>
 
         <aside className="w-64 bg-[#2b2d31] p-4 flex flex-col border-r border-black/20">
           <h1 className="text-xl font-bold border-b border-[#1e1f22] pb-4 truncate">
