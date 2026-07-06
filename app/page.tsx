@@ -10,6 +10,7 @@ type Message = {
   username: string;
   content: string;
   created_at: string;
+  edited_at: string | null;
   user_id: string | null;
   channel_id: string;
 };
@@ -46,14 +47,14 @@ function Avatar({
       <img
         src={avatarUrl}
         alt={username}
-        className={`${sizeClass} rounded-full object-cover bg-indigo-600 cursor-pointer`}
+        className={`${sizeClass} rounded-full object-cover bg-indigo-600 cursor-pointer ring-2 ring-transparent hover:ring-indigo-500 transition-all duration-200`}
       />
     );
   }
 
   return (
     <div
-      className={`${sizeClass} rounded-full bg-gradient-to-br from-indigo-500 to-purple-700 flex items-center justify-center font-bold cursor-pointer`}
+      className={`${sizeClass} rounded-full bg-gradient-to-br from-indigo-500 to-purple-700 flex items-center justify-center font-bold cursor-pointer ring-2 ring-transparent hover:ring-indigo-500 transition-all duration-200`}
     >
       {username[0]?.toUpperCase() || "Z"}
     </div>
@@ -133,7 +134,7 @@ export default function Home() {
   async function getMessages() {
     const { data, error } = await supabase
       .from("messages")
-      .select("id, username, content, created_at, user_id, channel_id")
+      .select("id, username, content, created_at, edited_at, user_id, channel_id")
       .eq("channel_id", activeChannel)
       .order("created_at", { ascending: true });
 
@@ -183,7 +184,10 @@ export default function Home() {
 
     const { error } = await supabase
       .from("messages")
-      .update({ content: editingContent })
+      .update({
+        content: editingContent,
+        edited_at: new Date().toISOString(),
+      })
       .eq("id", msg.id);
 
     if (error) {
@@ -270,15 +274,15 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#313338] text-white flex">
-      <aside className="w-20 bg-[#1e1f22] flex flex-col items-center py-4 gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center font-bold text-xl">
+      <aside className="w-20 bg-[#1e1f22] flex flex-col items-center py-4 gap-4 border-r border-black/20">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-700 flex items-center justify-center font-bold text-xl shadow-lg shadow-indigo-900/40">
           Z
         </div>
 
         {["🎮", "🎧", "💬"].map((icon) => (
           <div
             key={icon}
-            className="w-12 h-12 rounded-full bg-[#313338] hover:rounded-2xl hover:bg-indigo-600 transition-all flex items-center justify-center text-xl cursor-pointer"
+            className="w-12 h-12 rounded-full bg-[#313338] hover:rounded-2xl hover:bg-indigo-600 transition-all duration-200 flex items-center justify-center text-xl cursor-pointer hover:scale-105"
           >
             {icon}
           </div>
@@ -286,13 +290,13 @@ export default function Home() {
 
         <button
           onClick={() => router.push("/settings")}
-          className="w-12 h-12 rounded-full bg-[#313338] hover:rounded-2xl hover:bg-indigo-600 transition-all flex items-center justify-center text-xl"
+          className="w-12 h-12 rounded-full bg-[#313338] hover:rounded-2xl hover:bg-indigo-600 transition-all duration-200 flex items-center justify-center text-xl hover:scale-105"
         >
           ⚙️
         </button>
       </aside>
 
-      <aside className="w-64 bg-[#2b2d31] p-4 flex flex-col">
+      <aside className="w-64 bg-[#2b2d31] p-4 flex flex-col border-r border-black/20">
         <h1 className="text-xl font-bold border-b border-[#1e1f22] pb-4">
           ZencoLive
         </h1>
@@ -302,28 +306,30 @@ export default function Home() {
             METİN KANALLARI
           </p>
 
-          {textChannels.map((channel) => (
-            <button
-              key={channel.id}
-              onClick={() => {
-                setActiveChannel(channel.id);
-                setEditingId(null);
-                setContent("");
-              }}
-              className={`w-full text-left px-3 py-2 rounded text-gray-200 cursor-pointer ${
-                activeChannel === channel.id
-                  ? "bg-indigo-600"
-                  : "bg-[#404249] hover:bg-[#50525a]"
-              }`}
-            >
-              # {channel.name}
-            </button>
-          ))}
+          <div className="space-y-1">
+            {textChannels.map((channel) => (
+              <button
+                key={channel.id}
+                onClick={() => {
+                  setActiveChannel(channel.id);
+                  setEditingId(null);
+                  setContent("");
+                }}
+                className={`w-full text-left px-3 py-2 rounded-lg text-gray-200 cursor-pointer transition-all duration-200 ${
+                  activeChannel === channel.id
+                    ? "bg-indigo-600 shadow-lg shadow-indigo-900/30 translate-x-1"
+                    : "bg-[#404249] hover:bg-[#50525a] hover:translate-x-1"
+                }`}
+              >
+                # {channel.name}
+              </button>
+            ))}
+          </div>
         </div>
 
         <VoiceRoom username={username} />
 
-        <div className="mt-auto bg-[#232428] p-3 rounded">
+        <div className="mt-auto bg-[#232428] p-3 rounded-xl border border-[#3b3d44]">
           <div className="flex items-center gap-3">
             <Avatar username={username} avatarUrl={avatarUrl} size="sm" />
 
@@ -337,7 +343,7 @@ export default function Home() {
 
           <button
             onClick={logout}
-            className="mt-3 w-full bg-red-600 hover:bg-red-700 rounded px-3 py-2 text-sm font-bold"
+            className="mt-3 w-full bg-red-600 hover:bg-red-700 rounded-lg px-3 py-2 text-sm font-bold transition-all duration-200 hover:scale-[1.02]"
           >
             Çıkış Yap
           </button>
@@ -345,21 +351,25 @@ export default function Home() {
       </aside>
 
       <section className="flex-1 flex flex-col h-screen">
-        <header className="h-14 bg-[#313338] border-b border-[#1e1f22] flex items-center px-6">
+        <header className="h-14 bg-[#313338]/95 backdrop-blur border-b border-[#1e1f22] flex items-center px-6 shadow-sm">
           <h2 className="font-bold"># {activeChannelName}</h2>
         </header>
 
-        <div className="flex-1 p-6 space-y-5 overflow-y-auto">
+        <div className="flex-1 p-6 space-y-2 overflow-y-auto">
           {messages.map((msg) => {
             const profile = getProfileForMessage(msg);
             const displayName = profile?.username || msg.username || "Anonim";
             const displayAvatar = profile?.avatar_url || null;
 
             const canEdit = msg.user_id === currentUserId;
-            const canDelete = msg.user_id === currentUserId || currentRole === "admin";
+            const canDelete =
+              msg.user_id === currentUserId || currentRole === "admin";
 
             return (
-              <div key={msg.id} className="group flex gap-4">
+              <div
+                key={msg.id}
+                className="group flex gap-4 rounded-xl px-3 py-2 transition-all duration-200 hover:bg-[#2b2d31]"
+              >
                 <div onClick={() => profile && setSelectedProfile(profile)}>
                   <Avatar username={displayName} avatarUrl={displayAvatar} />
                 </div>
@@ -375,10 +385,11 @@ export default function Home() {
 
                     <span className="text-xs text-gray-400">
                       {new Date(msg.created_at).toLocaleString("tr-TR")}
+                      {msg.edited_at && " · düzenlendi"}
                     </span>
 
                     {(canEdit || canDelete) && (
-                      <div className="hidden group-hover:flex gap-2 ml-2">
+                      <div className="opacity-0 group-hover:opacity-100 flex gap-2 ml-2 transition-opacity duration-200">
                         {canEdit && (
                           <button
                             onClick={() => startEdit(msg)}
@@ -403,7 +414,7 @@ export default function Home() {
                   {editingId === msg.id ? (
                     <div className="mt-2">
                       <input
-                        className="w-full bg-[#383a40] rounded px-3 py-2 text-white outline-none"
+                        className="w-full bg-[#383a40] rounded-xl px-3 py-2 text-white outline-none border border-indigo-600/40"
                         value={editingContent}
                         onChange={(e) => setEditingContent(e.target.value)}
                         onKeyDown={(e) => {
@@ -430,7 +441,9 @@ export default function Home() {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-gray-300">{msg.content}</p>
+                    <p className="text-gray-300 leading-relaxed">
+                      {msg.content}
+                    </p>
                   )}
                 </div>
               </div>
@@ -440,9 +453,9 @@ export default function Home() {
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="p-5 flex gap-3">
+        <div className="p-5 flex gap-3 bg-[#313338]/95 backdrop-blur border-t border-[#1e1f22]">
           <input
-            className="flex-1 bg-[#383a40] rounded-xl px-4 py-3 text-white outline-none"
+            className="flex-1 bg-[#383a40] rounded-xl px-4 py-3 text-white outline-none border border-transparent focus:border-indigo-500 transition-all duration-200"
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onKeyDown={(e) => {
@@ -453,7 +466,7 @@ export default function Home() {
 
           <button
             onClick={sendMessage}
-            className="bg-indigo-600 hover:bg-indigo-700 px-5 rounded-xl font-bold"
+            className="bg-indigo-600 hover:bg-indigo-700 px-5 rounded-xl font-bold transition-all duration-200 hover:scale-[1.03] shadow-lg shadow-indigo-900/30"
           >
             Gönder
           </button>
@@ -463,11 +476,11 @@ export default function Home() {
       {selectedProfile && (
         <div
           onClick={() => setSelectedProfile(null)}
-          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-[#2b2d31] rounded-2xl overflow-hidden border border-[#404249] shadow-2xl"
+            className="w-full max-w-sm bg-[#2b2d31] rounded-2xl overflow-hidden border border-[#404249] shadow-2xl animate-[fadeIn_0.15s_ease-out]"
           >
             <div
               className="h-32 bg-gradient-to-r from-indigo-600 to-purple-700 bg-cover bg-center"
@@ -503,7 +516,7 @@ export default function Home() {
 
               <button
                 onClick={() => setSelectedProfile(null)}
-                className="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 rounded-xl py-2 font-bold"
+                className="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 rounded-xl py-2 font-bold transition-all duration-200 hover:scale-[1.02]"
               >
                 Kapat
               </button>
