@@ -11,13 +11,15 @@ type Server = {
 
 type TextChannel = {
   id: string;
+  server_id: string;
   name: string;
+  type: string;
 };
 
 type ChannelSidebarProps = {
   activeServer?: Server;
   textChannels: TextChannel[];
-  activeChannel: string;
+  activeChannelId: string;
   username: string;
   avatarUrl: string | null;
   currentRole: string;
@@ -52,7 +54,7 @@ function MiniAvatar({
 export default function ChannelSidebar({
   activeServer,
   textChannels,
-  activeChannel,
+  activeChannelId,
   username,
   avatarUrl,
   currentRole,
@@ -73,8 +75,8 @@ export default function ChannelSidebar({
             <button
               key={channel.id}
               onClick={() => onSelectChannel(channel.id)}
-              className={`w-full text-left px-3 py-2 rounded-lg text-gray-200 cursor-pointer transition-all duration-200 ${
-                activeChannel === channel.id
+              className={`w-full text-left px-3 py-2 rounded-lg text-gray-200 transition-all duration-200 ${
+                activeChannelId === channel.id
                   ? "bg-indigo-600 shadow-lg shadow-indigo-900/30 translate-x-1"
                   : "bg-[#404249] hover:bg-[#50525a] hover:translate-x-1"
               }`}

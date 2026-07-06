@@ -14,7 +14,9 @@ type Message = {
   created_at: string;
   edited_at: string | null;
   user_id: string | null;
-  channel_id: string;
+  channel_id: string | null;
+  server_id: string | null;
+  channel_uuid: string | null;
 };
 
 type Profile = {
@@ -32,12 +34,12 @@ type Server = {
   icon_url: string | null;
 };
 
-const textChannels = [
-  { id: "genel", name: "genel-sohbet" },
-  { id: "duyurular", name: "duyurular" },
-  { id: "yardim", name: "yardım" },
-  { id: "oyun", name: "oyun" },
-];
+type TextChannel = {
+  id: string;
+  server_id: string;
+  name: string;
+  type: string;
+};
 
 function Avatar({
   username,
@@ -74,7 +76,9 @@ export default function Home() {
   const router = useRouter();
 
   const [servers, setServers] = useState<Server[]>([]);
+  const [textChannels, setTextChannels] = useState<TextChannel[]>([]);
   const [activeServerId, setActiveServerId] = useState("");
+  const [activeChannelId, setActiveChannelId] = useState("");
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -82,7 +86,6 @@ export default function Home() {
   const [currentRole, setCurrentRole] = useState("user");
   const [username, setUsername] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [activeChannel, setActiveChannel] = useState("genel");
   const [content, setContent] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState("");
@@ -94,11 +97,14 @@ export default function Home() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const activeChannelName =
-    textChannels.find((c) => c.id === activeChannel)?.name || "genel-sohbet";
-
   const activeServer =
     servers.find((server) => server.id === activeServerId) || servers[0];
+
+  const activeChannel =
+    textChannels.find((channel) => channel.id === activeChannelId) ||
+    textChannels[0];
+
+  const activeChannelName = activeChannel?.name || "genel-sohbet";
 
   function scrollToBottom(behavior: ScrollBehavior = "smooth") {
     setTimeout(() => {
@@ -111,37 +117,33 @@ export default function Home() {
     return profiles.find((p) => p.username === msg.username) || null;
   }
 
-  useEffect(() => {
-    async function checkUser() {
-      const { data } = await supabase.auth.getUser();
+  async function checkUser() {
+    const { data } = await supabase.auth.getUser();
 
-      if (!data.user) {
-        router.push("/login");
-        return;
-      }
-
-      setCurrentUserId(data.user.id);
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id, username, avatar_url, banner_url, role")
-        .eq("id", data.user.id)
-        .single();
-
-      const name =
-        profile?.username ||
-        data.user.user_metadata?.username ||
-        data.user.email?.split("@")[0] ||
-        "Kullanıcı";
-
-      setUsername(name);
-      setAvatarUrl(profile?.avatar_url || null);
-      setCurrentRole(profile?.role || "user");
-      setLoading(false);
+    if (!data.user) {
+      router.push("/login");
+      return;
     }
 
-    checkUser();
-  }, [router]);
+    setCurrentUserId(data.user.id);
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id, username, avatar_url, banner_url, role")
+      .eq("id", data.user.id)
+      .single();
+
+    const name =
+      profile?.username ||
+      data.user.user_metadata?.username ||
+      data.user.email?.split("@")[0] ||
+      "Kullanıcı";
+
+    setUsername(name);
+    setAvatarUrl(profile?.avatar_url || null);
+    setCurrentRole(profile?.role || "user");
+    setLoading(false);
+  }
 
   async function getServers() {
     const { data, error } = await supabase
@@ -158,9 +160,31 @@ export default function Home() {
     }
   }
 
-  useEffect(() => {
-    if (currentUserId) getServers();
-  }, [currentUserId]);
+  async function getChannels(serverId: string) {
+    const { data, error } = await supabase
+      .from("channels")
+      .select("id, server_id, name, type")
+      .eq("server_id", serverId)
+      .eq("type", "text")
+      .order("created_at", { ascending: true });
+
+    if (!error && data) {
+      setTextChannels(data);
+      setActiveChannelId(data[0]?.id || "");
+    }
+  }
+
+  async function createDefaultChannels(serverId: string) {
+    const defaultChannels = ["genel-sohbet", "duyurular", "yardım", "oyun"];
+
+    await supabase.from("channels").insert(
+      defaultChannels.map((name) => ({
+        server_id: serverId,
+        name,
+        type: "text",
+      }))
+    );
+  }
 
   async function createServer(serverName: string) {
     if (!currentUserId) return;
@@ -195,11 +219,14 @@ export default function Home() {
       return;
     }
 
+    await createDefaultChannels(serverData.id);
+
     setServers((prev) => [...prev, serverData]);
     setActiveServerId(serverData.id);
-    setActiveChannel("genel");
     setCreateServerOpen(false);
     setCreateServerLoading(false);
+
+    await getChannels(serverData.id);
   }
 
   async function logout() {
@@ -216,10 +243,18 @@ export default function Home() {
   }
 
   async function getMessages() {
+    if (!activeServerId || !activeChannelId) {
+      setMessages([]);
+      return;
+    }
+
     const { data, error } = await supabase
       .from("messages")
-      .select("id, username, content, created_at, edited_at, user_id, channel_id")
-      .eq("channel_id", activeChannel)
+      .select(
+        "id, username, content, created_at, edited_at, user_id, channel_id, server_id, channel_uuid"
+      )
+      .eq("server_id", activeServerId)
+      .eq("channel_uuid", activeChannelId)
       .order("created_at", { ascending: true });
 
     if (!error && data) {
@@ -230,11 +265,14 @@ export default function Home() {
 
   async function sendMessage() {
     if (!content.trim()) return;
+    if (!activeServerId || !activeChannelId) return;
 
     const { error } = await supabase.from("messages").insert({
       username,
       user_id: currentUserId,
-      channel_id: activeChannel,
+      server_id: activeServerId,
+      channel_uuid: activeChannelId,
+      channel_id: activeChannelName,
       content,
     });
 
@@ -299,8 +337,25 @@ export default function Home() {
   }
 
   useEffect(() => {
+    checkUser();
+  }, []);
+
+  useEffect(() => {
+    if (currentUserId) getServers();
+  }, [currentUserId]);
+
+  useEffect(() => {
+    if (activeServerId) {
+      getChannels(activeServerId);
+      setEditingId(null);
+      setContent("");
+      setMessages([]);
+    }
+  }, [activeServerId]);
+
+  useEffect(() => {
     getMessages();
-  }, [activeChannel]);
+  }, [activeServerId, activeChannelId]);
 
   useEffect(() => {
     getProfiles();
@@ -313,7 +368,11 @@ export default function Home() {
         (payload: any) => {
           if (payload.eventType === "INSERT") {
             const newMessage = payload.new as Message;
-            if (newMessage.channel_id === activeChannel) {
+
+            if (
+              newMessage.server_id === activeServerId &&
+              newMessage.channel_uuid === activeChannelId
+            ) {
               setMessages((prev) => [...prev, newMessage]);
               scrollToBottom("smooth");
             }
@@ -322,7 +381,12 @@ export default function Home() {
           if (payload.eventType === "UPDATE") {
             const updatedMessage = payload.new as Message;
 
-            if (updatedMessage.channel_id !== activeChannel) return;
+            if (
+              updatedMessage.server_id !== activeServerId ||
+              updatedMessage.channel_uuid !== activeChannelId
+            ) {
+              return;
+            }
 
             setMessages((prev) =>
               prev.map((msg) =>
@@ -346,7 +410,7 @@ export default function Home() {
       supabase.removeChannel(channel);
       clearInterval(profileInterval);
     };
-  }, [activeChannel]);
+  }, [activeServerId, activeChannelId]);
 
   if (loading) {
     return (
@@ -390,7 +454,7 @@ export default function Home() {
           activeServerId={activeServerId}
           onSelectServer={(serverId) => {
             setActiveServerId(serverId);
-            setActiveChannel("genel");
+            setActiveChannelId("");
             setEditingId(null);
             setContent("");
           }}
@@ -401,12 +465,12 @@ export default function Home() {
         <ChannelSidebar
           activeServer={activeServer}
           textChannels={textChannels}
-          activeChannel={activeChannel}
+          activeChannelId={activeChannelId}
           username={username}
           avatarUrl={avatarUrl}
           currentRole={currentRole}
           onSelectChannel={(channelId) => {
-            setActiveChannel(channelId);
+            setActiveChannelId(channelId);
             setEditingId(null);
             setContent("");
           }}
