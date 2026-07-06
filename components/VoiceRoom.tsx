@@ -342,7 +342,7 @@ export default function VoiceRoom({
 
   return (
     <div className="mt-6">
-      <p className="text-xs text-gray-400 font-bold mb-2">SES KANALLARI</p>
+      
 
       <div className="space-y-1">
         {voiceChannels.length > 0 ? (
