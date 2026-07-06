@@ -36,6 +36,30 @@ const fallbackVoiceChannels: VoiceChannel[] = [
   { id: "genel-ses", server_id: "default", name: "Genel Ses", type: "voice" },
 ];
 
+function playUiSound(type: "join" | "leave" | "click") {
+  try {
+    const AudioContextClass =
+      window.AudioContext || (window as any).webkitAudioContext;
+
+    const audioCtx = new AudioContextClass();
+    const oscillator = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    oscillator.type = "sine";
+    oscillator.frequency.value =
+      type === "join" ? 660 : type === "leave" ? 330 : 520;
+
+    gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.18);
+
+    oscillator.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    oscillator.start();
+    oscillator.stop(audioCtx.currentTime + 0.18);
+  } catch {}
+}
+
 export default function VoiceRoom({
   username,
   voiceChannels = fallbackVoiceChannels,
@@ -53,11 +77,16 @@ export default function VoiceRoom({
   const [screenOwner, setScreenOwner] = useState("");
   const [streamOpen, setStreamOpen] = useState(false);
 
-  const [localScreenTrack, setLocalScreenTrack] = useState<LocalTrack | null>(null);
-  const [remoteScreenTrack, setRemoteScreenTrack] = useState<RemoteTrack | null>(null);
+  const [localScreenTrack, setLocalScreenTrack] = useState<LocalTrack | null>(
+    null
+  );
+  const [remoteScreenTrack, setRemoteScreenTrack] =
+    useState<RemoteTrack | null>(null);
 
   const [showScreenModal, setShowScreenModal] = useState(false);
-  const [screenQuality, setScreenQuality] = useState<"720p" | "1080p">("1080p");
+  const [screenQuality, setScreenQuality] = useState<"720p" | "1080p">(
+    "1080p"
+  );
   const [shareScreenAudio, setShareScreenAudio] = useState(true);
 
   const identityRef = useRef(`user-${Math.random().toString(36).slice(2)}`);
@@ -84,7 +113,9 @@ export default function VoiceRoom({
           const data = await res.json();
 
           result[channel.id] = {
-            participants: Array.isArray(data.participants) ? data.participants : [],
+            participants: Array.isArray(data.participants)
+              ? data.participants
+              : [],
             screenSharing: Boolean(data.screenSharing),
             screenOwner: data.screenOwner || "",
           };
@@ -97,9 +128,7 @@ export default function VoiceRoom({
 
   useEffect(() => {
     fetchVoiceParticipants();
-
     const interval = setInterval(fetchVoiceParticipants, 5000);
-
     return () => clearInterval(interval);
   }, [voiceChannels]);
 
@@ -168,6 +197,8 @@ export default function VoiceRoom({
 
   async function joinVoiceChannel(channelId: string, channelName: string) {
     try {
+      playUiSound("click");
+
       if (activeVoiceChannel === channelId && joined) {
         if (screenSharing || remoteScreenTrack) setStreamOpen(true);
         return;
@@ -182,9 +213,9 @@ export default function VoiceRoom({
       const res = await fetch(
         `/api/livekit-token?room=${encodeURIComponent(
           roomName
-        )}&username=${encodeURIComponent(displayName)}&identity=${encodeURIComponent(
-          identityRef.current
-        )}`
+        )}&username=${encodeURIComponent(
+          displayName
+        )}&identity=${encodeURIComponent(identityRef.current)}`
       );
 
       const data = await res.json();
@@ -251,6 +282,7 @@ export default function VoiceRoom({
       setScreenSharing(false);
       setActiveVoiceChannel(channelId);
       setStatus(`${channelName} kanalındasın 🎤`);
+      playUiSound("join");
 
       setTimeout(fetchVoiceParticipants, 1000);
     } catch (err: any) {
@@ -263,6 +295,8 @@ export default function VoiceRoom({
   async function toggleMicrophone() {
     if (!room) return;
 
+    playUiSound("click");
+
     const newMicState = !micEnabled;
     await room.localParticipant.setMicrophoneEnabled(newMicState);
 
@@ -272,6 +306,8 @@ export default function VoiceRoom({
 
   function openScreenShareSettings() {
     if (!room) return;
+
+    playUiSound("click");
 
     if (screenSharing) {
       stopScreenShare();
@@ -285,6 +321,8 @@ export default function VoiceRoom({
     if (!room) return;
 
     try {
+      playUiSound("click");
+
       const is1080p = screenQuality === "1080p";
 
       const publication = await room.localParticipant.setScreenShareEnabled(
@@ -312,7 +350,9 @@ export default function VoiceRoom({
       setStreamOpen(true);
 
       setStatus(
-        `${screenQuality} ekran${shareScreenAudio ? " + yüksek kalite ses" : ""} paylaşımı açık 🖥️`
+        `${screenQuality} ekran${
+          shareScreenAudio ? " + yüksek kalite ses" : ""
+        } paylaşımı açık 🖥️`
       );
 
       setTimeout(fetchVoiceParticipants, 1000);
@@ -323,6 +363,8 @@ export default function VoiceRoom({
 
   async function stopScreenShare() {
     if (!room) return;
+
+    playUiSound("click");
 
     await room.localParticipant.setScreenShareEnabled(false);
     setLocalScreenTrack(null);
@@ -337,13 +379,12 @@ export default function VoiceRoom({
     cleanupRoom();
     setActiveVoiceChannel("");
     setStatus("Ses kanalından çıktın");
+    playUiSound("leave");
     setTimeout(fetchVoiceParticipants, 1000);
   }
 
   return (
-    <div className="mt-6">
-      
-
+    <div className="mt-3">
       <div className="space-y-1">
         {voiceChannels.length > 0 ? (
           voiceChannels.map((channel) => {
@@ -355,20 +396,20 @@ export default function VoiceRoom({
             return (
               <div key={channel.id}>
                 <div
-                  className={`group flex items-center rounded-lg transition-all duration-200 ${
+                  className={`group flex items-center rounded-xl transition-all duration-200 ${
                     isActive
-                      ? "bg-green-700 shadow-lg shadow-green-900/30 translate-x-1"
-                      : "bg-[#404249] hover:bg-[#50525a] hover:translate-x-1"
+                      ? "bg-green-700 shadow-lg shadow-green-900/30 translate-x-1 ring-1 ring-green-400/50"
+                      : "bg-[#3a3c43] hover:bg-[#4b4d55] hover:translate-x-1"
                   }`}
                 >
                   <button
                     onClick={() => joinVoiceChannel(channel.id, channel.name)}
-                    className="flex-1 text-left px-3 py-2 text-gray-200"
+                    className="flex-1 text-left px-3 py-2 text-gray-200 transition-all duration-200 active:scale-95"
                   >
                     <span>🔊 {channel.name}</span>
 
                     {isLive && (
-                      <span className="ml-2 text-[10px] bg-red-600 px-2 py-0.5 rounded-full">
+                      <span className="ml-2 text-[10px] bg-red-600 px-2 py-0.5 rounded-full animate-pulse">
                         YAYINDA
                       </span>
                     )}
@@ -376,9 +417,10 @@ export default function VoiceRoom({
 
                   {canManageChannels && voiceChannels.length > 1 && (
                     <button
-                      onClick={() =>
-                        onDeleteVoiceChannel?.(channel.id, channel.name)
-                      }
+                      onClick={() => {
+                        playUiSound("click");
+                        onDeleteVoiceChannel?.(channel.id, channel.name);
+                      }}
                       className="opacity-0 group-hover:opacity-100 px-2 text-red-300 hover:text-red-500 transition"
                       title="Ses Kanalını Sil"
                     >
@@ -392,7 +434,7 @@ export default function VoiceRoom({
                     {names.map((name) => (
                       <div
                         key={`${channel.id}-${name}`}
-                        className="text-sm text-gray-300"
+                        className="text-sm text-gray-300 animate-[fadeIn_0.2s_ease-out]"
                       >
                         🎤 {name}
                       </div>
@@ -414,12 +456,12 @@ export default function VoiceRoom({
       <p className="text-xs text-gray-400 mt-3">{status}</p>
 
       {joined && (
-        <div className="mt-3 bg-[#232428] rounded-xl p-2 border border-[#3b3d44]">
+        <div className="mt-3 bg-[#232428] rounded-xl p-2 border border-[#3b3d44] shadow-lg animate-[fadeIn_0.2s_ease-out]">
           <div className="flex items-center justify-between gap-2">
             <button
               onClick={toggleMicrophone}
               title={micEnabled ? "Mikrofonu kapat" : "Mikrofonu aç"}
-              className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-all hover:scale-105 ${
+              className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-all hover:scale-105 active:scale-95 ${
                 micEnabled
                   ? "bg-[#383a40] hover:bg-yellow-600"
                   : "bg-blue-600 hover:bg-blue-700"
@@ -431,9 +473,9 @@ export default function VoiceRoom({
             <button
               onClick={openScreenShareSettings}
               title={screenSharing ? "Paylaşımı durdur" : "Ekranı paylaş"}
-              className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-all hover:scale-105 ${
+              className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-all hover:scale-105 active:scale-95 ${
                 screenSharing
-                  ? "bg-red-600 hover:bg-red-700"
+                  ? "bg-red-600 hover:bg-red-700 animate-pulse"
                   : "bg-[#383a40] hover:bg-purple-600"
               }`}
             >
@@ -442,9 +484,12 @@ export default function VoiceRoom({
 
             {(screenSharing || remoteScreenTrack) && (
               <button
-                onClick={() => setStreamOpen(true)}
+                onClick={() => {
+                  playUiSound("click");
+                  setStreamOpen(true);
+                }}
                 title="Yayını aç"
-                className="w-10 h-10 rounded-lg bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center text-lg transition-all hover:scale-105"
+                className="w-10 h-10 rounded-lg bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center text-lg transition-all hover:scale-105 active:scale-95 animate-pulse"
               >
                 👁️
               </button>
@@ -453,7 +498,7 @@ export default function VoiceRoom({
             <button
               onClick={leaveVoiceRoom}
               title="Odadan çık"
-              className="w-10 h-10 rounded-lg bg-red-600 hover:bg-red-700 flex items-center justify-center text-lg transition-all hover:scale-105"
+              className="w-10 h-10 rounded-lg bg-red-600 hover:bg-red-700 flex items-center justify-center text-lg transition-all hover:scale-105 active:scale-95"
             >
               📞
             </button>
@@ -463,7 +508,7 @@ export default function VoiceRoom({
 
       {streamOpen && (screenSharing || remoteScreenTrack) && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="w-full max-w-6xl bg-[#111214] rounded-2xl overflow-hidden border border-indigo-600 shadow-2xl">
+          <div className="w-full max-w-6xl bg-[#111214] rounded-2xl overflow-hidden border border-indigo-600 shadow-2xl animate-[fadeIn_0.15s_ease-out]">
             <div className="flex items-center justify-between px-4 py-3 bg-[#232428]">
               <p className="text-sm text-white">
                 {screenSharing
@@ -494,7 +539,10 @@ export default function VoiceRoom({
                 )}
 
                 <button
-                  onClick={() => setStreamOpen(false)}
+                  onClick={() => {
+                    playUiSound("click");
+                    setStreamOpen(false);
+                  }}
                   className="text-xs bg-[#404249] hover:bg-[#50535a] px-3 py-2 rounded"
                 >
                   Yayından Çık
@@ -524,7 +572,7 @@ export default function VoiceRoom({
 
       {showScreenModal && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-xl bg-[#1e1f22] border border-[#404249] shadow-2xl">
+          <div className="w-full max-w-md rounded-xl bg-[#1e1f22] border border-[#404249] shadow-2xl animate-[fadeIn_0.15s_ease-out]">
             <div className="px-5 py-4 border-b border-[#313338]">
               <h2 className="text-lg font-bold text-white">
                 Ekran Paylaşımı Ayarları
@@ -582,7 +630,10 @@ export default function VoiceRoom({
 
             <div className="px-5 py-4 border-t border-[#313338] flex justify-end gap-2">
               <button
-                onClick={() => setShowScreenModal(false)}
+                onClick={() => {
+                  playUiSound("click");
+                  setShowScreenModal(false);
+                }}
                 className="px-4 py-2 rounded bg-[#404249] hover:bg-[#50535a] text-sm font-bold"
               >
                 İptal
