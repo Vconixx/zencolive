@@ -110,8 +110,7 @@ export default function Home() {
   const activeChannelName = activeChannel?.name || "genel-sohbet";
 
   const canManageChannels =
-    !!activeServer &&
-    (activeServer.owner_id === currentUserId || currentRole === "admin");
+    !!activeServer && activeServer.owner_id === currentUserId;
 
   function scrollToBottom(behavior: ScrollBehavior = "smooth") {
     setTimeout(() => {
@@ -265,6 +264,39 @@ export default function Home() {
     setContent("");
     setEditingId(null);
     setMessages([]);
+  }
+
+  async function deleteChannel(channelId: string, channelName: string) {
+    if (!canManageChannels) {
+      alert("Kanal silme yetkin yok.");
+      return;
+    }
+
+    if (textChannels.length <= 1) {
+      alert("Son metin kanalını silemezsin.");
+      return;
+    }
+
+    const ok = confirm(`#${channelName} kanalı silinsin mi?`);
+    if (!ok) return;
+
+    const { error } = await supabase
+      .from("channels")
+      .delete()
+      .eq("id", channelId);
+
+    if (error) {
+      alert("Kanal silinemedi: " + error.message);
+      return;
+    }
+
+    const remaining = textChannels.filter((c) => c.id !== channelId);
+    setTextChannels(remaining);
+
+    if (activeChannelId === channelId) {
+      setActiveChannelId(remaining[0]?.id || "");
+      setMessages([]);
+    }
   }
 
   async function logout() {
@@ -509,6 +541,7 @@ export default function Home() {
           currentRole={currentRole}
           canManageChannels={canManageChannels}
           onCreateChannel={() => setCreateChannelOpen(true)}
+          onDeleteChannel={deleteChannel}
           onSelectChannel={(channelId) => {
             setActiveChannelId(channelId);
             setEditingId(null);

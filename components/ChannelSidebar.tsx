@@ -25,6 +25,7 @@ type ChannelSidebarProps = {
   currentRole: string;
   canManageChannels: boolean;
   onCreateChannel: () => void;
+  onDeleteChannel: (channelId: string, channelName: string) => void;
   onSelectChannel: (channelId: string) => void;
   onLogout: () => void;
 };
@@ -62,6 +63,7 @@ export default function ChannelSidebar({
   currentRole,
   canManageChannels,
   onCreateChannel,
+  onDeleteChannel,
   onSelectChannel,
   onLogout,
 }: ChannelSidebarProps) {
@@ -88,17 +90,31 @@ export default function ChannelSidebar({
 
         <div className="space-y-1">
           {textChannels.map((channel) => (
-            <button
+            <div
               key={channel.id}
-              onClick={() => onSelectChannel(channel.id)}
-              className={`w-full text-left px-3 py-2 rounded-lg text-gray-200 transition-all duration-200 ${
+              className={`group flex items-center rounded-lg transition-all duration-200 ${
                 activeChannelId === channel.id
                   ? "bg-indigo-600 shadow-lg shadow-indigo-900/30 translate-x-1"
                   : "bg-[#404249] hover:bg-[#50525a] hover:translate-x-1"
               }`}
             >
-              # {channel.name}
-            </button>
+              <button
+                onClick={() => onSelectChannel(channel.id)}
+                className="flex-1 text-left px-3 py-2 text-gray-200"
+              >
+                # {channel.name}
+              </button>
+
+              {canManageChannels && textChannels.length > 1 && (
+                <button
+                  onClick={() => onDeleteChannel(channel.id, channel.name)}
+                  className="opacity-0 group-hover:opacity-100 px-2 text-red-300 hover:text-red-500 transition"
+                  title="Kanalı Sil"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           ))}
         </div>
       </div>
