@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
-import VoiceRoom from "../components/VoiceRoom";
 import ServerSidebar from "../components/ServerSidebar";
+import ChannelSidebar from "../components/ChannelSidebar";
 
 type Message = {
   id: number;
@@ -342,73 +342,34 @@ export default function Home() {
 
       <main className="min-h-screen bg-[#313338] text-white flex">
         <ServerSidebar
-  servers={servers}
-  activeServerId={activeServerId}
-  onSelectServer={(serverId) => {
-    setActiveServerId(serverId);
-    setActiveChannel("genel");
-    setEditingId(null);
-    setContent("");
-  }}
-  onCreateServer={() =>
-    alert("Sunucu oluşturma sistemi sıradaki adımda gelecek.")
-  }
-  onOpenSettings={() => router.push("/settings")}
-/>
+          servers={servers}
+          activeServerId={activeServerId}
+          onSelectServer={(serverId) => {
+            setActiveServerId(serverId);
+            setActiveChannel("genel");
+            setEditingId(null);
+            setContent("");
+          }}
+          onCreateServer={() =>
+            alert("Sunucu oluşturma sistemi sıradaki adımda gelecek.")
+          }
+          onOpenSettings={() => router.push("/settings")}
+        />
 
-        <aside className="w-64 bg-[#2b2d31] p-4 flex flex-col border-r border-black/20">
-          <h1 className="text-xl font-bold border-b border-[#1e1f22] pb-4 truncate">
-            {activeServer?.name || "ZencoLive"}
-          </h1>
-
-          <div className="mt-4">
-            <p className="text-xs text-gray-400 font-bold mb-2">
-              METİN KANALLARI
-            </p>
-
-            <div className="space-y-1">
-              {textChannels.map((channel) => (
-                <button
-                  key={channel.id}
-                  onClick={() => {
-                    setActiveChannel(channel.id);
-                    setEditingId(null);
-                    setContent("");
-                  }}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-gray-200 cursor-pointer transition-all duration-200 ${
-                    activeChannel === channel.id
-                      ? "bg-indigo-600 shadow-lg shadow-indigo-900/30 translate-x-1"
-                      : "bg-[#404249] hover:bg-[#50525a] hover:translate-x-1"
-                  }`}
-                >
-                  # {channel.name}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <VoiceRoom username={username} />
-
-          <div className="mt-auto bg-[#232428] p-3 rounded-xl border border-[#3b3d44]">
-            <div className="flex items-center gap-3">
-              <Avatar username={username} avatarUrl={avatarUrl} size="sm" />
-
-              <div className="flex-1">
-                <p className="font-bold text-sm">{username}</p>
-                <p className="text-xs text-green-400">
-                  {currentRole === "admin" ? "Admin" : "Çevrimiçi"}
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={logout}
-              className="mt-3 w-full bg-red-600 hover:bg-red-700 rounded-lg px-3 py-2 text-sm font-bold transition-all duration-200 hover:scale-[1.02]"
-            >
-              Çıkış Yap
-            </button>
-          </div>
-        </aside>
+        <ChannelSidebar
+          activeServer={activeServer}
+          textChannels={textChannels}
+          activeChannel={activeChannel}
+          username={username}
+          avatarUrl={avatarUrl}
+          currentRole={currentRole}
+          onSelectChannel={(channelId) => {
+            setActiveChannel(channelId);
+            setEditingId(null);
+            setContent("");
+          }}
+          onLogout={logout}
+        />
 
         <section className="flex-1 flex flex-col h-screen">
           <header className="h-14 bg-[#313338]/95 backdrop-blur border-b border-[#1e1f22] flex items-center px-6 shadow-sm">
