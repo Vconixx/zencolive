@@ -8,6 +8,8 @@ import ChannelSidebar from "../components/ChannelSidebar";
 import CreateServerModal from "../components/CreateServerModal";
 import CreateChannelModal from "../components/CreateChannelModal";
 
+type ChannelType = "text" | "voice";
+
 type Message = {
   id: number;
   username: string;
@@ -35,7 +37,7 @@ type Server = {
   icon_url: string | null;
 };
 
-type TextChannel = {
+type Channel = {
   id: string;
   server_id: string;
   name: string;
@@ -77,7 +79,8 @@ export default function Home() {
   const router = useRouter();
 
   const [servers, setServers] = useState<Server[]>([]);
-  const [textChannels, setTextChannels] = useState<TextChannel[]>([]);
+  const [textChannels, setTextChannels] = useState<Channel[]>([]);
+  const [voiceChannels, setVoiceChannels] = useState<Channel[]>([]);
   const [activeServerId, setActiveServerId] = useState("");
   const [activeChannelId, setActiveChannelId] = useState("");
 
@@ -97,6 +100,8 @@ export default function Home() {
   const [createServerLoading, setCreateServerLoading] = useState(false);
   const [createChannelOpen, setCreateChannelOpen] = useState(false);
   const [createChannelLoading, setCreateChannelLoading] = useState(false);
+  const [createChannelType, setCreateChannelType] =
+    useState<ChannelType>("text");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -171,21 +176,31 @@ export default function Home() {
       .from("channels")
       .select("id, server_id, name, type")
       .eq("server_id", serverId)
-      .eq("type", "text")
       .order("created_at", { ascending: true });
 
     if (!error && data) {
-      setTextChannels(data);
-      setActiveChannelId(data[0]?.id || "");
+      const texts = data.filter((c) => c.type === "text");
+      const voices = data.filter((c) => c.type === "voice");
+
+      setTextChannels(texts);
+      setVoiceChannels(voices);
+      setActiveChannelId(texts[0]?.id || "");
     }
   }
 
   async function createDefaultChannels(serverId: string) {
-    await supabase.from("channels").insert({
-      server_id: serverId,
-      name: "genel-sohbet",
-      type: "text",
-    });
+    await supabase.from("channels").insert([
+      {
+        server_id: serverId,
+        name: "genel-sohbet",
+        type: "text",
+      },
+      {
+        server_id: serverId,
+        name: "genel-ses",
+        type: "voice",
+      },
+    ]);
   }
 
   async function createServer(serverName: string) {
@@ -231,6 +246,11 @@ export default function Home() {
     await getChannels(serverData.id);
   }
 
+  function openCreateChannel(type: ChannelType) {
+    setCreateChannelType(type);
+    setCreateChannelOpen(true);
+  }
+
   async function createChannel(channelName: string) {
     if (!activeServerId) return;
 
@@ -246,7 +266,7 @@ export default function Home() {
       .insert({
         server_id: activeServerId,
         name: channelName,
-        type: "text",
+        type: createChannelType,
       })
       .select("id, server_id, name, type")
       .single();
@@ -258,15 +278,20 @@ export default function Home() {
       return;
     }
 
-    setTextChannels((prev) => [...prev, data]);
-    setActiveChannelId(data.id);
+    if (createChannelType === "text") {
+      setTextChannels((prev) => [...prev, data]);
+      setActiveChannelId(data.id);
+      setMessages([]);
+    } else {
+      setVoiceChannels((prev) => [...prev, data]);
+    }
+
     setCreateChannelOpen(false);
     setContent("");
     setEditingId(null);
-    setMessages([]);
   }
 
-  async function deleteChannel(channelId: string, channelName: string) {
+  async function deleteTextChannel(channelId: string, channelName: string) {
     if (!canManageChannels) {
       alert("Kanal silme yetkin yok.");
       return;
@@ -277,7 +302,7 @@ export default function Home() {
       return;
     }
 
-    const ok = confirm(`#${channelName} kanalı silinsin mi?`);
+    const ok = confirm(`#${channelName} metin kanalı silinsin mi?`);
     if (!ok) return;
 
     const { error } = await supabase
@@ -297,6 +322,33 @@ export default function Home() {
       setActiveChannelId(remaining[0]?.id || "");
       setMessages([]);
     }
+  }
+
+  async function deleteVoiceChannel(channelId: string, channelName: string) {
+    if (!canManageChannels) {
+      alert("Ses kanalı silme yetkin yok.");
+      return;
+    }
+
+    if (voiceChannels.length <= 1) {
+      alert("Son ses kanalını silemezsin.");
+      return;
+    }
+
+    const ok = confirm(`🔊 ${channelName} ses kanalı silinsin mi?`);
+    if (!ok) return;
+
+    const { error } = await supabase
+      .from("channels")
+      .delete()
+      .eq("id", channelId);
+
+    if (error) {
+      alert("Ses kanalı silinemedi: " + error.message);
+      return;
+    }
+
+    setVoiceChannels((prev) => prev.filter((c) => c.id !== channelId));
   }
 
   async function logout() {
@@ -535,13 +587,16 @@ export default function Home() {
         <ChannelSidebar
           activeServer={activeServer}
           textChannels={textChannels}
+          voiceChannels={voiceChannels}
           activeChannelId={activeChannelId}
           username={username}
           avatarUrl={avatarUrl}
           currentRole={currentRole}
           canManageChannels={canManageChannels}
-          onCreateChannel={() => setCreateChannelOpen(true)}
-          onDeleteChannel={deleteChannel}
+          onCreateTextChannel={() => openCreateChannel("text")}
+          onCreateVoiceChannel={() => openCreateChannel("voice")}
+          onDeleteTextChannel={deleteTextChannel}
+          onDeleteVoiceChannel={deleteVoiceChannel}
           onSelectChannel={(channelId) => {
             setActiveChannelId(channelId);
             setEditingId(null);
@@ -737,6 +792,7 @@ export default function Home() {
         <CreateChannelModal
           open={createChannelOpen}
           loading={createChannelLoading}
+          channelType={createChannelType}
           onClose={() => setCreateChannelOpen(false)}
           onCreate={createChannel}
         />

@@ -12,12 +12,12 @@ import {
   AudioPresets,
 } from "livekit-client";
 
-const voiceChannels = [
-  { id: "genel-ses", name: "Genel Ses" },
-  { id: "lol", name: "LoL" },
-  { id: "cs2", name: "CS2" },
-  { id: "muzik", name: "Müzik" },
-];
+type VoiceChannel = {
+  id: string;
+  server_id: string;
+  name: string;
+  type: string;
+};
 
 type VoiceInfo = {
   participants: string[];
@@ -25,7 +25,23 @@ type VoiceInfo = {
   screenOwner: string;
 };
 
-export default function VoiceRoom({ username }: { username: string }) {
+type VoiceRoomProps = {
+  username: string;
+  voiceChannels?: VoiceChannel[];
+  canManageChannels?: boolean;
+  onDeleteVoiceChannel?: (channelId: string, channelName: string) => void;
+};
+
+const fallbackVoiceChannels: VoiceChannel[] = [
+  { id: "genel-ses", server_id: "default", name: "Genel Ses", type: "voice" },
+];
+
+export default function VoiceRoom({
+  username,
+  voiceChannels = fallbackVoiceChannels,
+  canManageChannels = false,
+  onDeleteVoiceChannel,
+}: VoiceRoomProps) {
   const [room, setRoom] = useState<Room | null>(null);
   const [joined, setJoined] = useState(false);
   const [activeVoiceChannel, setActiveVoiceChannel] = useState("");
@@ -49,13 +65,22 @@ export default function VoiceRoom({ username }: { username: string }) {
   const remoteScreenVideoRef = useRef<HTMLVideoElement>(null);
   const audioElementsRef = useRef<HTMLAudioElement[]>([]);
 
+  function livekitRoomName(channelId: string) {
+    return `voice-${channelId}`;
+  }
+
   async function fetchVoiceParticipants() {
     try {
       const result: Record<string, VoiceInfo> = {};
 
       await Promise.all(
         voiceChannels.map(async (channel) => {
-          const res = await fetch(`/api/livekit-participants?room=${channel.id}`);
+          const res = await fetch(
+            `/api/livekit-participants?room=${encodeURIComponent(
+              livekitRoomName(channel.id)
+            )}`
+          );
+
           const data = await res.json();
 
           result[channel.id] = {
@@ -72,9 +97,11 @@ export default function VoiceRoom({ username }: { username: string }) {
 
   useEffect(() => {
     fetchVoiceParticipants();
+
     const interval = setInterval(fetchVoiceParticipants, 5000);
+
     return () => clearInterval(interval);
-  }, []);
+  }, [voiceChannels]);
 
   useEffect(() => {
     if (localScreenTrack && localScreenVideoRef.current) {
@@ -150,11 +177,14 @@ export default function VoiceRoom({ username }: { username: string }) {
       setStatus(`${channelName} kanalına bağlanılıyor...`);
 
       const displayName = username.trim() || "Anonim";
+      const roomName = livekitRoomName(channelId);
 
       const res = await fetch(
-        `/api/livekit-token?room=${channelId}&username=${encodeURIComponent(
-          displayName
-        )}&identity=${encodeURIComponent(identityRef.current)}`
+        `/api/livekit-token?room=${encodeURIComponent(
+          roomName
+        )}&username=${encodeURIComponent(displayName)}&identity=${encodeURIComponent(
+          identityRef.current
+        )}`
       );
 
       const data = await res.json();
@@ -315,49 +345,70 @@ export default function VoiceRoom({ username }: { username: string }) {
       <p className="text-xs text-gray-400 font-bold mb-2">SES KANALLARI</p>
 
       <div className="space-y-1">
-        {voiceChannels.map((channel) => {
-          const info = voiceInfo[channel.id];
-          const names = info?.participants || [];
-          const isActive = activeVoiceChannel === channel.id;
-          const isLive = info?.screenSharing;
+        {voiceChannels.length > 0 ? (
+          voiceChannels.map((channel) => {
+            const info = voiceInfo[channel.id];
+            const names = info?.participants || [];
+            const isActive = activeVoiceChannel === channel.id;
+            const isLive = info?.screenSharing;
 
-          return (
-            <div key={channel.id}>
-              <button
-                onClick={() => joinVoiceChannel(channel.id, channel.name)}
-                className={`w-full text-left px-3 py-2 rounded-lg text-gray-200 transition-all duration-200 ${
-                  isActive
-                    ? "bg-green-700 shadow-lg shadow-green-900/30 translate-x-1"
-                    : "bg-[#404249] hover:bg-[#50525a] hover:translate-x-1"
-                }`}
-              >
-                <span>🔊 {channel.name}</span>
-                {isLive && (
-                  <span className="ml-2 text-[10px] bg-red-600 px-2 py-0.5 rounded-full">
-                    YAYINDA
-                  </span>
-                )}
-              </button>
+            return (
+              <div key={channel.id}>
+                <div
+                  className={`group flex items-center rounded-lg transition-all duration-200 ${
+                    isActive
+                      ? "bg-green-700 shadow-lg shadow-green-900/30 translate-x-1"
+                      : "bg-[#404249] hover:bg-[#50525a] hover:translate-x-1"
+                  }`}
+                >
+                  <button
+                    onClick={() => joinVoiceChannel(channel.id, channel.name)}
+                    className="flex-1 text-left px-3 py-2 text-gray-200"
+                  >
+                    <span>🔊 {channel.name}</span>
 
-              {names.length > 0 ? (
-                <div className="mt-1 mb-2 ml-4 space-y-1">
-                  {names.map((name) => (
-                    <div
-                      key={`${channel.id}-${name}`}
-                      className="text-sm text-gray-300"
+                    {isLive && (
+                      <span className="ml-2 text-[10px] bg-red-600 px-2 py-0.5 rounded-full">
+                        YAYINDA
+                      </span>
+                    )}
+                  </button>
+
+                  {canManageChannels && voiceChannels.length > 1 && (
+                    <button
+                      onClick={() =>
+                        onDeleteVoiceChannel?.(channel.id, channel.name)
+                      }
+                      className="opacity-0 group-hover:opacity-100 px-2 text-red-300 hover:text-red-500 transition"
+                      title="Ses Kanalını Sil"
                     >
-                      🎤 {name}
-                    </div>
-                  ))}
+                      ✕
+                    </button>
+                  )}
                 </div>
-              ) : (
-                <p className="mt-1 mb-2 ml-4 text-xs text-gray-500">
-                  Odada kimse yok
-                </p>
-              )}
-            </div>
-          );
-        })}
+
+                {names.length > 0 ? (
+                  <div className="mt-1 mb-2 ml-4 space-y-1">
+                    {names.map((name) => (
+                      <div
+                        key={`${channel.id}-${name}`}
+                        className="text-sm text-gray-300"
+                      >
+                        🎤 {name}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-1 mb-2 ml-4 text-xs text-gray-500">
+                    Odada kimse yok
+                  </p>
+                )}
+              </div>
+            );
+          })
+        ) : (
+          <p className="text-xs text-gray-500 ml-2">Ses kanalı yok</p>
+        )}
       </div>
 
       <p className="text-xs text-gray-400 mt-3">{status}</p>

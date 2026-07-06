@@ -9,42 +9,33 @@ type Server = {
   icon_url: string | null;
 };
 
-type TextChannel = {
+type Channel = {
   id: string;
   server_id: string;
   name: string;
   type: string;
 };
 
-type ChannelSidebarProps = {
+type Props = {
   activeServer?: Server;
-  textChannels: TextChannel[];
+  textChannels: Channel[];
+  voiceChannels: Channel[];
   activeChannelId: string;
   username: string;
   avatarUrl: string | null;
   currentRole: string;
   canManageChannels: boolean;
-  onCreateChannel: () => void;
-  onDeleteChannel: (channelId: string, channelName: string) => void;
-  onSelectChannel: (channelId: string) => void;
+  onCreateTextChannel: () => void;
+  onCreateVoiceChannel: () => void;
+  onDeleteTextChannel: (id: string, name: string) => void;
+  onDeleteVoiceChannel: (id: string, name: string) => void;
+  onSelectChannel: (id: string) => void;
   onLogout: () => void;
 };
 
-function MiniAvatar({
-  username,
-  avatarUrl,
-}: {
-  username: string;
-  avatarUrl: string | null;
-}) {
+function MiniAvatar({ username, avatarUrl }: { username: string; avatarUrl: string | null }) {
   if (avatarUrl) {
-    return (
-      <img
-        src={avatarUrl}
-        alt={username}
-        className="w-9 h-9 rounded-full object-cover bg-indigo-600"
-      />
-    );
+    return <img src={avatarUrl} alt={username} className="w-9 h-9 rounded-full object-cover bg-indigo-600" />;
   }
 
   return (
@@ -57,16 +48,19 @@ function MiniAvatar({
 export default function ChannelSidebar({
   activeServer,
   textChannels,
+  voiceChannels,
   activeChannelId,
   username,
   avatarUrl,
   currentRole,
   canManageChannels,
-  onCreateChannel,
-  onDeleteChannel,
+  onCreateTextChannel,
+  onCreateVoiceChannel,
+  onDeleteTextChannel,
+  onDeleteVoiceChannel,
   onSelectChannel,
   onLogout,
-}: ChannelSidebarProps) {
+}: Props) {
   return (
     <aside className="w-64 bg-[#2b2d31] p-4 flex flex-col border-r border-black/20">
       <h1 className="text-xl font-bold border-b border-[#1e1f22] pb-4 truncate">
@@ -78,11 +72,7 @@ export default function ChannelSidebar({
           <p className="text-xs text-gray-400 font-bold">METİN KANALLARI</p>
 
           {canManageChannels && (
-            <button
-              onClick={onCreateChannel}
-              className="w-6 h-6 rounded hover:bg-[#50525a] text-gray-300 hover:text-white transition"
-              title="Kanal Oluştur"
-            >
+            <button onClick={onCreateTextChannel} className="w-6 h-6 rounded hover:bg-[#50525a] text-gray-300 hover:text-white">
               +
             </button>
           )}
@@ -92,24 +82,20 @@ export default function ChannelSidebar({
           {textChannels.map((channel) => (
             <div
               key={channel.id}
-              className={`group flex items-center rounded-lg transition-all duration-200 ${
+              className={`group flex items-center rounded-lg ${
                 activeChannelId === channel.id
                   ? "bg-indigo-600 shadow-lg shadow-indigo-900/30 translate-x-1"
                   : "bg-[#404249] hover:bg-[#50525a] hover:translate-x-1"
               }`}
             >
-              <button
-                onClick={() => onSelectChannel(channel.id)}
-                className="flex-1 text-left px-3 py-2 text-gray-200"
-              >
+              <button onClick={() => onSelectChannel(channel.id)} className="flex-1 text-left px-3 py-2 text-gray-200">
                 # {channel.name}
               </button>
 
               {canManageChannels && textChannels.length > 1 && (
                 <button
-                  onClick={() => onDeleteChannel(channel.id, channel.name)}
-                  className="opacity-0 group-hover:opacity-100 px-2 text-red-300 hover:text-red-500 transition"
-                  title="Kanalı Sil"
+                  onClick={() => onDeleteTextChannel(channel.id, channel.name)}
+                  className="opacity-0 group-hover:opacity-100 px-2 text-red-300 hover:text-red-500"
                 >
                   ✕
                 </button>
@@ -119,7 +105,24 @@ export default function ChannelSidebar({
         </div>
       </div>
 
-      <VoiceRoom username={username} />
+      <div className="mt-6">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs text-gray-400 font-bold">SES KANALLARI</p>
+
+          {canManageChannels && (
+            <button onClick={onCreateVoiceChannel} className="w-6 h-6 rounded hover:bg-[#50525a] text-gray-300 hover:text-white">
+              +
+            </button>
+          )}
+        </div>
+
+        <VoiceRoom
+          username={username}
+          voiceChannels={voiceChannels}
+          canManageChannels={canManageChannels}
+          onDeleteVoiceChannel={onDeleteVoiceChannel}
+        />
+      </div>
 
       <div className="mt-auto bg-[#232428] p-3 rounded-xl border border-[#3b3d44]">
         <div className="flex items-center gap-3">
@@ -135,7 +138,7 @@ export default function ChannelSidebar({
 
         <button
           onClick={onLogout}
-          className="mt-3 w-full bg-red-600 hover:bg-red-700 rounded-lg px-3 py-2 text-sm font-bold transition-all duration-200 hover:scale-[1.02]"
+          className="mt-3 w-full bg-red-600 hover:bg-red-700 rounded-lg px-3 py-2 text-sm font-bold"
         >
           Çıkış Yap
         </button>

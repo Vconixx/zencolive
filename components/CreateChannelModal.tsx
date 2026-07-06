@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+type ChannelType = "text" | "voice";
 
 type Props = {
   open: boolean;
   loading: boolean;
+  channelType: ChannelType;
   onClose: () => void;
   onCreate: (channelName: string) => void;
 };
@@ -12,10 +15,15 @@ type Props = {
 export default function CreateChannelModal({
   open,
   loading,
+  channelType,
   onClose,
   onCreate,
 }: Props) {
   const [channelName, setChannelName] = useState("");
+
+  useEffect(() => {
+    if (open) setChannelName("");
+  }, [open]);
 
   if (!open) return null;
 
@@ -28,13 +36,19 @@ export default function CreateChannelModal({
     onCreate(channelName.trim().replaceAll(" ", "-").toLowerCase());
   }
 
+  const isVoice = channelType === "voice";
+
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-[#2b2d31] border border-[#404249] rounded-2xl shadow-2xl overflow-hidden">
         <div className="p-6 border-b border-[#1e1f22]">
-          <h2 className="text-2xl font-bold text-white">Kanal Oluştur</h2>
+          <h2 className="text-2xl font-bold text-white">
+            {isVoice ? "Ses Kanalı Oluştur" : "Metin Kanalı Oluştur"}
+          </h2>
           <p className="text-sm text-gray-400 mt-1">
-            Bu sunucuya yeni metin kanalı ekle.
+            {isVoice
+              ? "Bu sunucuya yeni ses kanalı ekle."
+              : "Bu sunucuya yeni metin kanalı ekle."}
           </p>
         </div>
 
@@ -42,10 +56,10 @@ export default function CreateChannelModal({
           <label className="text-xs text-gray-400 font-bold">KANAL ADI</label>
 
           <div className="mt-2 flex items-center bg-[#383a40] rounded-xl px-4 border border-transparent focus-within:border-indigo-500">
-            <span className="text-gray-400 mr-2">#</span>
+            <span className="text-gray-400 mr-2">{isVoice ? "🔊" : "#"}</span>
             <input
               className="flex-1 bg-transparent py-3 outline-none text-white"
-              placeholder="örnek: sohbet"
+              placeholder={isVoice ? "örnek: genel-ses" : "örnek: sohbet"}
               value={channelName}
               onChange={(e) => setChannelName(e.target.value)}
               onKeyDown={(e) => {
