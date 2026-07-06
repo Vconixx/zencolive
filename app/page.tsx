@@ -23,6 +23,13 @@ type Profile = {
   role: string | null;
 };
 
+type Server = {
+  id: string;
+  name: string;
+  owner_id: string | null;
+  icon_url: string | null;
+};
+
 const textChannels = [
   { id: "genel", name: "genel-sohbet" },
   { id: "duyurular", name: "duyurular" },
@@ -64,6 +71,9 @@ function Avatar({
 export default function Home() {
   const router = useRouter();
 
+  const [servers, setServers] = useState<Server[]>([]);
+  const [activeServerId, setActiveServerId] = useState("");
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [currentUserId, setCurrentUserId] = useState("");
@@ -81,6 +91,9 @@ export default function Home() {
 
   const activeChannelName =
     textChannels.find((c) => c.id === activeChannel)?.name || "genel-sohbet";
+
+  const activeServer =
+    servers.find((server) => server.id === activeServerId) || servers[0];
 
   function scrollToBottom(behavior: ScrollBehavior = "smooth") {
     setTimeout(() => {
@@ -124,6 +137,25 @@ export default function Home() {
 
     checkUser();
   }, [router]);
+
+  async function getServers() {
+    const { data, error } = await supabase
+      .from("servers")
+      .select("id, name, owner_id, icon_url")
+      .order("created_at", { ascending: true });
+
+    if (!error && data) {
+      setServers(data);
+
+      if (!activeServerId && data.length > 0) {
+        setActiveServerId(data[0].id);
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (currentUserId) getServers();
+  }, [currentUserId]);
 
   async function logout() {
     await supabase.auth.signOut();
@@ -271,12 +303,6 @@ export default function Home() {
     };
   }, [activeChannel]);
 
-  useEffect(() => {
-    if (messages.length > 0) {
-      scrollToBottom("auto");
-    }
-  }, []);
-
   if (loading) {
     return (
       <main className="min-h-screen bg-[#313338] text-white flex items-center justify-center">
@@ -314,31 +340,67 @@ export default function Home() {
       `}</style>
 
       <main className="min-h-screen bg-[#313338] text-white flex">
-        <aside className="w-20 bg-[#1e1f22] flex flex-col items-center py-4 gap-4 border-r border-black/20">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-700 flex items-center justify-center font-bold text-xl shadow-lg shadow-indigo-900/40">
-            Z
-          </div>
+        <aside className="w-20 bg-[#1e1f22] flex flex-col items-center py-4 gap-3 border-r border-black/20">
+          {servers.length > 0 ? (
+            servers.map((server) => {
+              const isActive = server.id === activeServerId;
 
-          {["🎮", "🎧", "💬"].map((icon) => (
-            <div
-              key={icon}
-              className="w-12 h-12 rounded-full bg-[#313338] hover:rounded-2xl hover:bg-indigo-600 transition-all duration-200 flex items-center justify-center text-xl cursor-pointer hover:scale-105"
-            >
-              {icon}
+              return (
+                <button
+                  key={server.id}
+                  onClick={() => {
+                    setActiveServerId(server.id);
+                    setActiveChannel("genel");
+                    setEditingId(null);
+                    setContent("");
+                  }}
+                  title={server.name}
+                  className={`w-12 h-12 flex items-center justify-center font-bold text-xl transition-all duration-200 overflow-hidden ${
+                    isActive
+                      ? "rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-900/40"
+                      : "rounded-full bg-[#313338] hover:rounded-2xl hover:bg-indigo-600 hover:scale-105"
+                  }`}
+                >
+                  {server.icon_url ? (
+                    <img
+                      src={server.icon_url}
+                      alt={server.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    server.name[0]?.toUpperCase() || "Z"
+                  )}
+                </button>
+              );
+            })
+          ) : (
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-700 flex items-center justify-center font-bold text-xl shadow-lg shadow-indigo-900/40">
+              Z
             </div>
-          ))}
+          )}
+
+          <div className="w-10 h-[2px] bg-[#313338] rounded-full my-1" />
+
+          <button
+            onClick={() => alert("Sunucu oluşturma sistemi sıradaki adımda gelecek.")}
+            title="Sunucu oluştur"
+            className="w-12 h-12 rounded-full bg-[#313338] hover:rounded-2xl hover:bg-green-600 transition-all duration-200 flex items-center justify-center text-2xl hover:scale-105"
+          >
+            +
+          </button>
 
           <button
             onClick={() => router.push("/settings")}
-            className="w-12 h-12 rounded-full bg-[#313338] hover:rounded-2xl hover:bg-indigo-600 transition-all duration-200 flex items-center justify-center text-xl hover:scale-105"
+            title="Ayarlar"
+            className="w-12 h-12 rounded-full bg-[#313338] hover:rounded-2xl hover:bg-indigo-600 transition-all duration-200 flex items-center justify-center text-xl hover:scale-105 mt-auto"
           >
             ⚙️
           </button>
         </aside>
 
         <aside className="w-64 bg-[#2b2d31] p-4 flex flex-col border-r border-black/20">
-          <h1 className="text-xl font-bold border-b border-[#1e1f22] pb-4">
-            ZencoLive
+          <h1 className="text-xl font-bold border-b border-[#1e1f22] pb-4 truncate">
+            {activeServer?.name || "ZencoLive"}
           </h1>
 
           <div className="mt-4">
