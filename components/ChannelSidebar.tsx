@@ -23,6 +23,8 @@ type ChannelSidebarProps = {
   username: string;
   avatarUrl: string | null;
   currentRole: string;
+  canManageChannels: boolean;
+  onCreateChannel: () => void;
   onSelectChannel: (channelId: string) => void;
   onLogout: () => void;
 };
@@ -58,6 +60,8 @@ export default function ChannelSidebar({
   username,
   avatarUrl,
   currentRole,
+  canManageChannels,
+  onCreateChannel,
   onSelectChannel,
   onLogout,
 }: ChannelSidebarProps) {
@@ -68,7 +72,19 @@ export default function ChannelSidebar({
       </h1>
 
       <div className="mt-4">
-        <p className="text-xs text-gray-400 font-bold mb-2">METİN KANALLARI</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs text-gray-400 font-bold">METİN KANALLARI</p>
+
+          {canManageChannels && (
+            <button
+              onClick={onCreateChannel}
+              className="w-6 h-6 rounded hover:bg-[#50525a] text-gray-300 hover:text-white transition"
+              title="Kanal Oluştur"
+            >
+              +
+            </button>
+          )}
+        </div>
 
         <div className="space-y-1">
           {textChannels.map((channel) => (

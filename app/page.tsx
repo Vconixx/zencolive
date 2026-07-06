@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabase";
 import ServerSidebar from "../components/ServerSidebar";
 import ChannelSidebar from "../components/ChannelSidebar";
 import CreateServerModal from "../components/CreateServerModal";
+import CreateChannelModal from "../components/CreateChannelModal";
 
 type Message = {
   id: number;
@@ -94,6 +95,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [createServerOpen, setCreateServerOpen] = useState(false);
   const [createServerLoading, setCreateServerLoading] = useState(false);
+  const [createChannelOpen, setCreateChannelOpen] = useState(false);
+  const [createChannelLoading, setCreateChannelLoading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -105,6 +108,10 @@ export default function Home() {
     textChannels[0];
 
   const activeChannelName = activeChannel?.name || "genel-sohbet";
+
+  const canManageChannels =
+    !!activeServer &&
+    (activeServer.owner_id === currentUserId || currentRole === "admin");
 
   function scrollToBottom(behavior: ScrollBehavior = "smooth") {
     setTimeout(() => {
@@ -175,15 +182,11 @@ export default function Home() {
   }
 
   async function createDefaultChannels(serverId: string) {
-    const defaultChannels = ["genel-sohbet", "duyurular", "yardım", "oyun"];
-
-    await supabase.from("channels").insert(
-      defaultChannels.map((name) => ({
-        server_id: serverId,
-        name,
-        type: "text",
-      }))
-    );
+    await supabase.from("channels").insert({
+      server_id: serverId,
+      name: "genel-sohbet",
+      type: "text",
+    });
   }
 
   async function createServer(serverName: string) {
@@ -227,6 +230,41 @@ export default function Home() {
     setCreateServerLoading(false);
 
     await getChannels(serverData.id);
+  }
+
+  async function createChannel(channelName: string) {
+    if (!activeServerId) return;
+
+    if (!canManageChannels) {
+      alert("Kanal oluşturma yetkin yok.");
+      return;
+    }
+
+    setCreateChannelLoading(true);
+
+    const { data, error } = await supabase
+      .from("channels")
+      .insert({
+        server_id: activeServerId,
+        name: channelName,
+        type: "text",
+      })
+      .select("id, server_id, name, type")
+      .single();
+
+    setCreateChannelLoading(false);
+
+    if (error || !data) {
+      alert("Kanal oluşturulamadı: " + error?.message);
+      return;
+    }
+
+    setTextChannels((prev) => [...prev, data]);
+    setActiveChannelId(data.id);
+    setCreateChannelOpen(false);
+    setContent("");
+    setEditingId(null);
+    setMessages([]);
   }
 
   async function logout() {
@@ -469,6 +507,8 @@ export default function Home() {
           username={username}
           avatarUrl={avatarUrl}
           currentRole={currentRole}
+          canManageChannels={canManageChannels}
+          onCreateChannel={() => setCreateChannelOpen(true)}
           onSelectChannel={(channelId) => {
             setActiveChannelId(channelId);
             setEditingId(null);
@@ -659,6 +699,13 @@ export default function Home() {
           loading={createServerLoading}
           onClose={() => setCreateServerOpen(false)}
           onCreate={createServer}
+        />
+
+        <CreateChannelModal
+          open={createChannelOpen}
+          loading={createChannelLoading}
+          onClose={() => setCreateChannelOpen(false)}
+          onCreate={createChannel}
         />
       </main>
     </>
