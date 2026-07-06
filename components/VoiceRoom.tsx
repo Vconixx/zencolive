@@ -18,6 +18,12 @@ const voiceChannels = [
   { id: "muzik", name: "Müzik" },
 ];
 
+type VoiceInfo = {
+  participants: string[];
+  screenSharing: boolean;
+  screenOwner: string;
+};
+
 export default function VoiceRoom({ username }: { username: string }) {
   const [room, setRoom] = useState<Room | null>(null);
   const [joined, setJoined] = useState(false);
@@ -25,8 +31,11 @@ export default function VoiceRoom({ username }: { username: string }) {
   const [micEnabled, setMicEnabled] = useState(true);
   const [screenSharing, setScreenSharing] = useState(false);
   const [status, setStatus] = useState("Ses kanalına katılmadın");
-  const [participants, setParticipants] = useState<Record<string, string[]>>({});
+
+  const [voiceInfo, setVoiceInfo] = useState<Record<string, VoiceInfo>>({});
   const [screenOwner, setScreenOwner] = useState("");
+  const [streamOpen, setStreamOpen] = useState(false);
+
   const [localScreenTrack, setLocalScreenTrack] = useState<LocalTrack | null>(null);
   const [remoteScreenTrack, setRemoteScreenTrack] = useState<RemoteTrack | null>(null);
 
@@ -41,19 +50,24 @@ export default function VoiceRoom({ username }: { username: string }) {
 
   async function fetchVoiceParticipants() {
     try {
-      const all: Record<string, string[]> = {};
+      const result: Record<string, VoiceInfo> = {};
 
       await Promise.all(
         voiceChannels.map(async (channel) => {
           const res = await fetch(`/api/livekit-participants?room=${channel.id}`);
           const data = await res.json();
-          all[channel.id] = Array.isArray(data.participants)
-            ? data.participants
-            : [];
+
+          result[channel.id] = {
+            participants: Array.isArray(data.participants)
+              ? data.participants
+              : [],
+            screenSharing: Boolean(data.screenSharing),
+            screenOwner: data.screenOwner || "",
+          };
         })
       );
 
-      setParticipants(all);
+      setVoiceInfo(result);
     } catch {}
   }
 
@@ -73,7 +87,7 @@ export default function VoiceRoom({ username }: { username: string }) {
         localScreenTrack.detach(localScreenVideoRef.current);
       }
     };
-  }, [localScreenTrack]);
+  }, [localScreenTrack, streamOpen]);
 
   useEffect(() => {
     if (remoteScreenTrack && remoteScreenVideoRef.current) {
@@ -85,7 +99,7 @@ export default function VoiceRoom({ username }: { username: string }) {
         remoteScreenTrack.detach(remoteScreenVideoRef.current);
       }
     };
-  }, [remoteScreenTrack]);
+  }, [remoteScreenTrack, streamOpen]);
 
   function playRemoteAudio(track: RemoteTrack) {
     if (track.kind !== Track.Kind.Audio) return;
@@ -118,13 +132,17 @@ export default function VoiceRoom({ username }: { username: string }) {
     setMicEnabled(true);
     setScreenSharing(false);
     setScreenOwner("");
+    setStreamOpen(false);
     setLocalScreenTrack(null);
     setRemoteScreenTrack(null);
   }
 
   async function joinVoiceChannel(channelId: string, channelName: string) {
     try {
-      if (activeVoiceChannel === channelId && joined) return;
+      if (activeVoiceChannel === channelId && joined) {
+        if (screenSharing || remoteScreenTrack) setStreamOpen(true);
+        return;
+      }
 
       cleanupRoom();
 
@@ -169,6 +187,7 @@ export default function VoiceRoom({ username }: { username: string }) {
           if (publication.source === Track.Source.ScreenShare) {
             setRemoteScreenTrack(track);
             setScreenOwner(participant.name || participant.identity);
+            setStatus(`${channelName} kanalındasın · yayın var 🖥️`);
             return;
           }
 
@@ -182,6 +201,7 @@ export default function VoiceRoom({ username }: { username: string }) {
           if (publication.source === Track.Source.ScreenShare) {
             setRemoteScreenTrack(null);
             setScreenOwner("");
+            setStreamOpen(false);
             return;
           }
 
@@ -254,10 +274,13 @@ export default function VoiceRoom({ username }: { username: string }) {
       setLocalScreenTrack(publication?.track ?? null);
       setScreenSharing(true);
       setShowScreenModal(false);
+      setStreamOpen(true);
 
       setStatus(
         `${screenQuality} ekran${shareScreenAudio ? " + ses" : ""} paylaşımı açık 🖥️`
       );
+
+      setTimeout(fetchVoiceParticipants, 1000);
     } catch (err: any) {
       alert("Ekran paylaşımı başlatılamadı: " + err.message);
     }
@@ -269,7 +292,10 @@ export default function VoiceRoom({ username }: { username: string }) {
     await room.localParticipant.setScreenShareEnabled(false);
     setLocalScreenTrack(null);
     setScreenSharing(false);
+    setStreamOpen(false);
     setStatus("Ekran paylaşımı kapalı");
+
+    setTimeout(fetchVoiceParticipants, 1000);
   }
 
   function leaveVoiceRoom() {
@@ -285,8 +311,10 @@ export default function VoiceRoom({ username }: { username: string }) {
 
       <div className="space-y-1">
         {voiceChannels.map((channel) => {
-          const names = participants[channel.id] || [];
+          const info = voiceInfo[channel.id];
+          const names = info?.participants || [];
           const isActive = activeVoiceChannel === channel.id;
+          const isLive = info?.screenSharing;
 
           return (
             <div key={channel.id}>
@@ -298,19 +326,29 @@ export default function VoiceRoom({ username }: { username: string }) {
                     : "bg-[#404249] hover:bg-[#50525a] hover:translate-x-1"
                 }`}
               >
-                🔊 {channel.name}
+                <span>🔊 {channel.name}</span>
+                {isLive && (
+                  <span className="ml-2 text-[10px] bg-red-600 px-2 py-0.5 rounded-full">
+                    YAYINDA
+                  </span>
+                )}
               </button>
 
               {names.length > 0 ? (
                 <div className="mt-1 mb-2 ml-4 space-y-1">
                   {names.map((name) => (
-                    <div key={`${channel.id}-${name}`} className="text-sm text-gray-300">
+                    <div
+                      key={`${channel.id}-${name}`}
+                      className="text-sm text-gray-300"
+                    >
                       🎤 {name}
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="mt-1 mb-2 ml-4 text-xs text-gray-500">Odada kimse yok</p>
+                <p className="mt-1 mb-2 ml-4 text-xs text-gray-500">
+                  Odada kimse yok
+                </p>
               )}
             </div>
           );
@@ -321,6 +359,15 @@ export default function VoiceRoom({ username }: { username: string }) {
 
       {joined && (
         <div className="mt-3 space-y-2">
+          {(screenSharing || remoteScreenTrack) && (
+            <button
+              onClick={() => setStreamOpen(true)}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-2 text-sm font-bold"
+            >
+              🖥️ Yayını Aç
+            </button>
+          )}
+
           <button
             onClick={toggleMicrophone}
             className={`w-full rounded-lg px-3 py-2 text-sm font-bold transition-all duration-200 hover:scale-[1.02] ${
@@ -345,66 +392,71 @@ export default function VoiceRoom({ username }: { username: string }) {
 
           <button
             onClick={leaveVoiceRoom}
-            className="w-full bg-red-600 hover:bg-red-700 rounded-lg px-3 py-2 text-sm font-bold transition-all duration-200 hover:scale-[1.02]"
+            className="w-full bg-red-600 hover:bg-red-700 rounded-lg px-3 py-2 text-sm font-bold"
           >
             Odadan Çık
           </button>
         </div>
       )}
 
-      {screenSharing && (
-        <div className="mt-4 bg-[#111214] rounded-xl overflow-hidden border border-purple-600">
-          <div className="flex items-center justify-between px-3 py-2 bg-[#232428]">
-            <p className="text-xs text-white">
-              🖥️ Sen ekran paylaşıyorsun ({screenQuality})
-            </p>
+      {streamOpen && (screenSharing || remoteScreenTrack) && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="w-full max-w-6xl bg-[#111214] rounded-2xl overflow-hidden border border-indigo-600 shadow-2xl">
+            <div className="flex items-center justify-between px-4 py-3 bg-[#232428]">
+              <p className="text-sm text-white">
+                {screenSharing
+                  ? `🖥️ Sen ekran paylaşıyorsun (${screenQuality})`
+                  : `🖥️ ${screenOwner} yayın yapıyor`}
+              </p>
 
-            <div className="flex gap-2">
-              <button
-                onClick={() => localScreenVideoRef.current?.requestFullscreen()}
-                className="text-xs bg-[#404249] hover:bg-[#50535a] px-2 py-1 rounded"
-              >
-                Tam ekran
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() =>
+                    (screenSharing
+                      ? localScreenVideoRef.current
+                      : remoteScreenVideoRef.current
+                    )?.requestFullscreen()
+                  }
+                  className="text-xs bg-[#404249] hover:bg-[#50535a] px-3 py-2 rounded"
+                >
+                  Tam ekran
+                </button>
 
-              <button
-                onClick={stopScreenShare}
-                className="text-xs bg-red-600 hover:bg-red-700 px-2 py-1 rounded"
-              >
-                Durdur
-              </button>
+                {screenSharing && (
+                  <button
+                    onClick={stopScreenShare}
+                    className="text-xs bg-red-600 hover:bg-red-700 px-3 py-2 rounded"
+                  >
+                    Yayını Durdur
+                  </button>
+                )}
+
+                <button
+                  onClick={() => setStreamOpen(false)}
+                  className="text-xs bg-[#404249] hover:bg-[#50535a] px-3 py-2 rounded"
+                >
+                  Yayından Çık
+                </button>
+              </div>
             </div>
+
+            {screenSharing ? (
+              <video
+                ref={localScreenVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className="w-full bg-black aspect-video"
+              />
+            ) : (
+              <video
+                ref={remoteScreenVideoRef}
+                autoPlay
+                playsInline
+                className="w-full bg-black aspect-video"
+              />
+            )}
           </div>
-
-          <video
-            ref={localScreenVideoRef}
-            autoPlay
-            muted
-            playsInline
-            className="w-full bg-black aspect-video"
-          />
-        </div>
-      )}
-
-      {screenOwner && (
-        <div className="mt-4 bg-[#111214] rounded-xl overflow-hidden border border-indigo-600">
-          <div className="flex items-center justify-between px-3 py-2 bg-[#232428]">
-            <p className="text-xs text-white">🖥️ {screenOwner} ekran paylaşıyor</p>
-
-            <button
-              onClick={() => remoteScreenVideoRef.current?.requestFullscreen()}
-              className="text-xs bg-[#404249] hover:bg-[#50535a] px-2 py-1 rounded"
-            >
-              Tam ekran
-            </button>
-          </div>
-
-          <video
-            ref={remoteScreenVideoRef}
-            autoPlay
-            playsInline
-            className="w-full bg-black aspect-video"
-          />
         </div>
       )}
 
