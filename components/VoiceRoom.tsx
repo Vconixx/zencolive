@@ -9,6 +9,7 @@ import {
   RemoteParticipant,
   Track,
   LocalTrack,
+  AudioPresets,
 } from "livekit-client";
 
 const voiceChannels = [
@@ -104,9 +105,12 @@ export default function VoiceRoom({ username }: { username: string }) {
 
     const audioElement = track.attach() as HTMLAudioElement;
     audioElement.autoplay = true;
+    audioElement.volume = 1;
     audioElement.style.display = "none";
+
     document.body.appendChild(audioElement);
     audioElementsRef.current.push(audioElement);
+
     audioElement.play().catch(console.error);
   }
 
@@ -164,6 +168,7 @@ export default function VoiceRoom({ username }: { username: string }) {
         dynacast: false,
         publishDefaults: {
           simulcast: false,
+          audioPreset: AudioPresets.musicHighQualityStereo,
           screenShareEncoding: {
             maxBitrate: 20_000_000,
             maxFramerate: 30,
@@ -264,6 +269,9 @@ export default function VoiceRoom({ username }: { username: string }) {
           videoEncoding: is1080p
             ? { maxBitrate: 20_000_000, maxFramerate: 30 }
             : { maxBitrate: 8_000_000, maxFramerate: 30 },
+          audioPreset: AudioPresets.musicHighQualityStereo,
+          dtx: false,
+          red: false,
           simulcast: false,
         } as any
       );
@@ -274,7 +282,7 @@ export default function VoiceRoom({ username }: { username: string }) {
       setStreamOpen(true);
 
       setStatus(
-        `${screenQuality} ekran${shareScreenAudio ? " + ses" : ""} paylaşımı açık 🖥️`
+        `${screenQuality} ekran${shareScreenAudio ? " + yüksek kalite ses" : ""} paylaşımı açık 🖥️`
       );
 
       setTimeout(fetchVoiceParticipants, 1000);
@@ -513,7 +521,9 @@ export default function VoiceRoom({ username }: { username: string }) {
                 <div>
                   <p className="font-bold text-white">Ekran sesini paylaş</p>
                   <p className="text-xs text-gray-400">
-                    Chrome penceresinde ses kutusu çıkarsa onu da işaretle.
+                    Chrome paylaşım ekranında “Sesi de paylaş” kutusu çıkarsa
+                    mutlaka işaretle. Maç/YouTube için en temiz ses genelde
+                    Chrome sekmesi paylaşınca gelir.
                   </p>
                 </div>
               </label>
