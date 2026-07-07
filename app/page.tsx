@@ -53,6 +53,27 @@ function generateInviteCode() {
   return Math.random().toString(36).slice(2, 10).toUpperCase();
 }
 
+function linkifyText(text: string) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+  return text.split(urlRegex).map((part, index) => {
+    if (part.match(urlRegex)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-400 hover:text-blue-300 hover:underline break-all transition"
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
+}
+
 function Avatar({
   username,
   avatarUrl,
@@ -894,7 +915,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                       </div>
                     ) : (
                       <p className="text-gray-300 leading-relaxed">
-                        {msg.content}
+                        {linkifyText(msg.content)}
                       </p>
                     )}
                   </div>
