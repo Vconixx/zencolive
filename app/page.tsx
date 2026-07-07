@@ -49,6 +49,13 @@ type Channel = {
   type: string;
 };
 
+type MessageReaction = {
+  id: string;
+  message_id: number;
+  user_id: string;
+  emoji: string;
+};
+
 function generateInviteCode() {
   return Math.random().toString(36).slice(2, 10).toUpperCase();
 }
@@ -213,6 +220,7 @@ export default function Home() {
   const [activeChannelId, setActiveChannelId] = useState("");
 
   const [messages, setMessages] = useState<Message[]>([]);
+  const [messageReactions, setMessageReactions] = useState<MessageReaction[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [currentUserId, setCurrentUserId] = useState("");
   const [currentRole, setCurrentRole] = useState("user");
@@ -386,6 +394,121 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     } catch {
       // Tarayıcı otomatik sesi engellerse sessiz geç.
     }
+  }
+
+  const reactionEmojis = ["👍", "😂", "❤️", "🔥", "😮", "😢"];
+
+  function getReactionsForMessage(messageId: number) {
+    return messageReactions.filter((reaction) => reaction.message_id === messageId);
+  }
+
+  function getGroupedReactions(messageId: number) {
+    const reactions = getReactionsForMessage(messageId);
+
+    return reactionEmojis
+      .map((emoji) => {
+        const emojiReactions = reactions.filter((reaction) => reaction.emoji === emoji);
+
+        return {
+          emoji,
+          count: emojiReactions.length,
+          reactedByMe: emojiReactions.some(
+            (reaction) => reaction.user_id === currentUserId
+          ),
+        };
+      })
+      .filter((reaction) => reaction.count > 0);
+  }
+
+  async function getReactions(messageIds?: number[]) {
+    const ids = messageIds || messages.map((message) => message.id);
+
+    if (ids.length === 0) {
+      setMessageReactions([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("message_reactions")
+      .select("id, message_id, user_id, emoji")
+      .in("message_id", ids);
+
+    if (!error && data) {
+      setMessageReactions(data);
+    }
+  }
+
+  async function toggleReaction(messageId: number, emoji: string) {
+    if (!currentUserId) return;
+
+    const existingReaction = messageReactions.find(
+      (reaction) =>
+        reaction.message_id === messageId &&
+        reaction.user_id === currentUserId &&
+        reaction.emoji === emoji
+    );
+
+    if (existingReaction) {
+      const { error } = await supabase
+        .from("message_reactions")
+        .delete()
+        .eq("id", existingReaction.id);
+
+      if (error) {
+        showToast("Reaksiyon kaldırılamadı.", "error");
+      }
+
+      return;
+    }
+
+    const { error } = await supabase.from("message_reactions").insert({
+      message_id: messageId,
+      user_id: currentUserId,
+      emoji,
+    });
+
+    if (error) {
+      showToast("Reaksiyon eklenemedi.", "error");
+    }
+  }
+
+  function renderMessageReactions(messageId: number) {
+    const groupedReactions = getGroupedReactions(messageId);
+
+    return (
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {groupedReactions.map((reaction) => (
+          <button
+            key={reaction.emoji}
+            onClick={() => toggleReaction(messageId, reaction.emoji)}
+            className={`h-8 rounded-full px-3 text-sm font-bold border transition-all duration-200 hover:scale-105 active:scale-95 ${
+              reaction.reactedByMe
+                ? "bg-indigo-600/25 border-indigo-500 text-white shadow-md shadow-indigo-900/20"
+                : "bg-[#232428] border-[#404249] text-gray-200 hover:border-indigo-500"
+            }`}
+            title="Reaksiyon"
+          >
+            <span className="mr-1">{reaction.emoji}</span>
+            <span>{reaction.count}</span>
+          </button>
+        ))}
+
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <div className="flex items-center gap-1 rounded-full bg-[#232428] border border-[#404249] px-2 py-1 shadow-lg">
+            {reactionEmojis.map((emoji) => (
+              <button
+                key={emoji}
+                onClick={() => toggleReaction(messageId, emoji)}
+                className="w-7 h-7 rounded-full hover:bg-[#3a3c43] transition-all duration-200 hover:scale-125 active:scale-95"
+                title={`${emoji} ekle`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   function getProfileForMessage(msg: Message) {
@@ -684,6 +807,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
     if (!error && data) {
       setMessages(data);
+      await getReactions(data.map((message) => message.id));
       scrollToBottom("auto");
     }
   }
@@ -872,6 +996,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       setEditingId(null);
       setContent("");
       setMessages([]);
+      setMessageReactions([]);
     }
   }, [activeServerId]);
 
@@ -934,6 +1059,33 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           if (payload.eventType === "DELETE") {
             setMessages((prev) =>
               prev.filter((msg) => msg.id !== payload.old.id)
+            );
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "message_reactions" },
+        (payload: any) => {
+          if (payload.eventType === "INSERT") {
+            const newReaction = payload.new as MessageReaction;
+
+            setMessageReactions((prev) => {
+              const alreadyExists = prev.some(
+                (reaction) => reaction.id === newReaction.id
+              );
+
+              if (alreadyExists) return prev;
+
+              return [...prev, newReaction];
+            });
+          }
+
+          if (payload.eventType === "DELETE") {
+            const oldReaction = payload.old as MessageReaction;
+
+            setMessageReactions((prev) =>
+              prev.filter((reaction) => reaction.id !== oldReaction.id)
             );
           }
         }
@@ -1368,6 +1520,8 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                             </div>
                           </a>
                         )}
+
+                        {renderMessageReactions(msg.id)}
                       </div>
                     )}
                   </div>
