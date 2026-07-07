@@ -1242,15 +1242,15 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
         {selectedImageUrl && (
           <div
             onClick={() => setSelectedImageUrl(null)}
-            className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-sm flex items-center justify-center p-6"
+            className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="relative max-w-5xl max-h-[90vh] rounded-2xl overflow-hidden border border-[#404249] bg-[#111214] shadow-2xl animate-[fadeIn_0.15s_ease-out]"
+              className="relative max-w-[96vw] max-h-[94vh] rounded-2xl border border-[#404249] bg-[#111214] shadow-2xl animate-[fadeIn_0.15s_ease-out] flex items-center justify-center"
             >
               <button
                 onClick={() => setSelectedImageUrl(null)}
-                className="absolute top-3 right-3 z-10 w-10 h-10 rounded-full bg-black/70 hover:bg-red-600 text-white font-black transition"
+                className="absolute -top-4 -right-4 z-10 w-11 h-11 rounded-full bg-[#1f2026] hover:bg-red-600 text-white font-black transition border border-white/10 shadow-xl"
                 title="Kapat"
               >
                 ✕
@@ -1259,26 +1259,9 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
               <img
                 src={selectedImageUrl}
                 alt="Büyük resim"
-                className="max-w-[90vw] max-h-[85vh] object-contain bg-black"
+                className="max-w-[94vw] max-h-[92vh] object-contain rounded-2xl bg-black cursor-zoom-out"
+                onClick={() => setSelectedImageUrl(null)}
               />
-
-              <div className="absolute bottom-3 left-3 right-3 flex justify-between gap-3">
-                <button
-                  onClick={() => navigator.clipboard.writeText(selectedImageUrl)}
-                  className="rounded-xl bg-black/70 hover:bg-indigo-600 px-4 py-2 text-sm font-bold transition"
-                >
-                  Linki Kopyala
-                </button>
-
-                <a
-                  href={selectedImageUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="rounded-xl bg-black/70 hover:bg-[#404249] px-4 py-2 text-sm font-bold transition"
-                >
-                  Yeni Sekmede Aç
-                </a>
-              </div>
             </div>
           </div>
         )}
