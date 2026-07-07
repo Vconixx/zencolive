@@ -441,18 +441,16 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   async function toggleReaction(messageId: number, emoji: string) {
     if (!currentUserId) return;
 
-    const existingReaction = messageReactions.find(
+    const myCurrentReaction = messageReactions.find(
       (reaction) =>
-        reaction.message_id === messageId &&
-        reaction.user_id === currentUserId &&
-        reaction.emoji === emoji
+        reaction.message_id === messageId && reaction.user_id === currentUserId
     );
 
-    if (existingReaction) {
+    if (myCurrentReaction?.emoji === emoji) {
       const { error } = await supabase
         .from("message_reactions")
         .delete()
-        .eq("id", existingReaction.id);
+        .eq("id", myCurrentReaction.id);
 
       if (error) {
         showToast("Reaksiyon kaldırılamadı: " + error.message, "error");
@@ -460,10 +458,26 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       }
 
       setMessageReactions((prev) =>
-        prev.filter((reaction) => reaction.id !== existingReaction.id)
+        prev.filter((reaction) => reaction.id !== myCurrentReaction.id)
       );
 
       return;
+    }
+
+    if (myCurrentReaction) {
+      const { error: deleteError } = await supabase
+        .from("message_reactions")
+        .delete()
+        .eq("id", myCurrentReaction.id);
+
+      if (deleteError) {
+        showToast("Eski reaksiyon kaldırılamadı: " + deleteError.message, "error");
+        return;
+      }
+
+      setMessageReactions((prev) =>
+        prev.filter((reaction) => reaction.id !== myCurrentReaction.id)
+      );
     }
 
     const { data, error } = await supabase
@@ -488,11 +502,15 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
     if (data) {
       setMessageReactions((prev) => {
-        const alreadyExists = prev.some((reaction) => reaction.id === data.id);
+        const withoutMyOldReaction = prev.filter(
+          (reaction) =>
+            !(
+              reaction.message_id === messageId &&
+              reaction.user_id === currentUserId
+            )
+        );
 
-        if (alreadyExists) return prev;
-
-        return [...prev, data];
+        return [...withoutMyOldReaction, data];
       });
     }
   }
@@ -522,7 +540,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           </div>
         )}
 
-        <div className="pointer-events-none absolute -top-10 left-0 z-20 opacity-0 translate-y-1 group-hover:pointer-events-auto group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200">
+        <div className="pointer-events-none absolute -top-9 right-3 z-30 opacity-0 translate-y-1 group-hover:pointer-events-auto group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200">
           <div className="flex items-center gap-1 rounded-full bg-[#1f2026] border border-[#404249] px-2 py-1 shadow-xl">
             {reactionEmojis.map((emoji) => (
               <button
@@ -1366,7 +1384,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
               return (
                 <div
                   key={msg.id}
-                  className="group relative flex gap-4 rounded-xl px-3 py-1.5 transition-all duration-200 hover:bg-[#2b2d31]"
+                  className="group relative flex gap-4 rounded-xl pl-3 pr-36 py-1.5 transition-all duration-200 hover:bg-[#2b2d31]"
                 >
                   <div onClick={() => profile && setSelectedProfile(profile)}>
                     <Avatar username={displayName} avatarUrl={displayAvatar} />
