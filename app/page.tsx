@@ -540,7 +540,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           </div>
         )}
 
-        <div className="pointer-events-none absolute -top-9 right-3 z-30 opacity-0 translate-y-1 group-hover:pointer-events-auto group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200">
+        <div className="zenco-reaction-picker pointer-events-none absolute -top-9 left-[520px] z-30 opacity-0 translate-y-1 group-hover:pointer-events-auto group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200">
           <div className="flex items-center gap-1 rounded-full bg-[#1f2026] border border-[#404249] px-2 py-1 shadow-xl">
             {reactionEmojis.map((emoji) => (
               <button
@@ -1228,6 +1228,12 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           width: 330px !important;
           margin: 0 !important;
         }
+
+        @media (max-width: 1100px) {
+          .zenco-reaction-picker {
+            left: 320px !important;
+          }
+        }
       `}</style>
 
       <main className="min-h-screen bg-[#313338] text-white flex">
@@ -1384,7 +1390,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
               return (
                 <div
                   key={msg.id}
-                  className="group relative flex gap-4 rounded-xl pl-3 pr-36 py-1.5 transition-all duration-200 hover:bg-[#2b2d31]"
+                  className="group relative flex gap-4 rounded-xl px-3 py-1.5 transition-all duration-200 hover:bg-[#2b2d31]"
                 >
                   <div onClick={() => profile && setSelectedProfile(profile)}>
                     <Avatar username={displayName} avatarUrl={displayAvatar} />
