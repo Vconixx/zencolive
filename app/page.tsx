@@ -280,7 +280,8 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     useState<ChannelType>("text");
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [serverNotificationSettings, setServerNotificationSettings] =
+    useState<Record<string, boolean>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -298,6 +299,31 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
   const canManageChannels =
     !!activeServer && activeServer.owner_id === currentUserId;
+
+  const soundEnabled =
+    activeServerId ? serverNotificationSettings[activeServerId] !== false : true;
+
+  function setCurrentServerNotification(enabled: boolean) {
+    if (!activeServerId) return;
+
+    const nextSettings = {
+      ...serverNotificationSettings,
+      [activeServerId]: enabled,
+    };
+
+    setServerNotificationSettings(nextSettings);
+    localStorage.setItem(
+      "zencolive-server-notifications",
+      JSON.stringify(nextSettings)
+    );
+
+    showToast(
+      enabled
+        ? `${activeServer?.name || "Sunucu"} bildirimleri açıldı.`
+        : `${activeServer?.name || "Sunucu"} bildirimleri kapatıldı.`,
+      "success"
+    );
+  }
 
   function scrollToBottom(behavior: ScrollBehavior = "smooth") {
     setTimeout(() => {
@@ -825,6 +851,18 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   }, []);
 
   useEffect(() => {
+    try {
+      const savedSettings = localStorage.getItem("zencolive-server-notifications");
+
+      if (savedSettings) {
+        setServerNotificationSettings(JSON.parse(savedSettings));
+      }
+    } catch {
+      setServerNotificationSettings({});
+    }
+  }, []);
+
+  useEffect(() => {
     if (currentUserId) getServers();
   }, [currentUserId]);
 
@@ -1122,15 +1160,15 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
             <h2 className="font-bold"># {activeChannelName}</h2>
 
             <button
-              onClick={() => setSoundEnabled((prev) => !prev)}
+              onClick={() => setCurrentServerNotification(!soundEnabled)}
               className={`ml-auto px-3 py-1.5 rounded-lg text-xs font-bold transition ${
                 soundEnabled
                   ? "bg-indigo-600/20 text-indigo-200 hover:bg-indigo-600/30"
                   : "bg-[#404249] text-gray-300 hover:bg-[#50535a]"
               }`}
-              title="Bildirim sesi"
+              title="Bu sunucunun bildirim sesi"
             >
-              {soundEnabled ? "🔔 Bildirim Açık" : "🔕 Bildirim Kapalı"}
+              {soundEnabled ? "🔔 Bu Sunucuda Açık" : "🔕 Bu Sunucuda Kapalı"}
             </button>
           </header>
 
