@@ -544,8 +544,8 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      showToast("Resim en fazla 5 MB olabilir.", "error");
+    if (file.size > 20 * 1024 * 1024) {
+      showToast("Resim en fazla 20 MB olabilir.", "error");
       return;
     }
 
@@ -589,6 +589,20 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    const items = Array.from(e.clipboardData.items);
+    const imageItem = items.find((item) => item.type.startsWith("image/"));
+
+    if (!imageItem) return;
+
+    const file = imageItem.getAsFile();
+
+    if (!file) return;
+
+    e.preventDefault();
+    uploadMessageFile(file);
   }
 
   async function sendMessage() {
@@ -1145,6 +1159,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                 className="flex-1 bg-transparent px-1 py-2 text-white outline-none placeholder:text-gray-400"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
+                onPaste={handlePaste}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") sendMessage();
                   if (e.key === "Escape") setAttachmentMenuOpen(false);
