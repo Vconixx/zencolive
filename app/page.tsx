@@ -96,6 +96,15 @@ function getFirstImageLink(text: string) {
   return links.find((link) => isImageUrl(link)) || null;
 }
 
+function isOnlyImageMessage(text: string) {
+  const trimmed = text.trim();
+  const imageLink = getFirstImageLink(trimmed);
+
+  if (!imageLink) return false;
+
+  return trimmed === imageLink;
+}
+
 function Avatar({
   username,
   avatarUrl,
@@ -996,9 +1005,11 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                       </div>
                     ) : (
                       <div>
-                        <p className="text-gray-300 leading-relaxed break-words">
-                          {linkifyText(msg.content)}
-                        </p>
+                        {!isOnlyImageMessage(msg.content) && (
+                          <p className="text-gray-300 leading-relaxed break-words">
+                            {linkifyText(msg.content)}
+                          </p>
+                        )}
 
                         {getFirstImageLink(msg.content) && (
                           <a
@@ -1014,14 +1025,16 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                               loading="lazy"
                             />
 
-                            <div className="px-4 py-3 bg-[#232428]">
-                              <p className="text-xs text-indigo-300 font-bold uppercase tracking-wide">
-                                Resim Önizlemesi
-                              </p>
-                              <p className="text-sm text-gray-400 mt-1 break-all">
-                                {getFirstImageLink(msg.content)}
-                              </p>
-                            </div>
+                            {!isOnlyImageMessage(msg.content) && (
+                              <div className="px-4 py-3 bg-[#232428]">
+                                <p className="text-xs text-indigo-300 font-bold uppercase tracking-wide">
+                                  Resim Önizlemesi
+                                </p>
+                                <p className="text-sm text-gray-400 mt-1 break-all">
+                                  {getFirstImageLink(msg.content)}
+                                </p>
+                              </div>
+                            )}
                           </a>
                         )}
 
