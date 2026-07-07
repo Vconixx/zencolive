@@ -87,6 +87,15 @@ function getLinkHost(url: string) {
   }
 }
 
+function isImageUrl(url: string) {
+  return /\.(png|jpe?g|gif|webp|avif)(\?.*)?$/i.test(url);
+}
+
+function getFirstImageLink(text: string) {
+  const links = text.match(/https?:\/\/[^\s]+/g) || [];
+  return links.find((link) => isImageUrl(link)) || null;
+}
+
 function Avatar({
   username,
   avatarUrl,
@@ -932,7 +941,32 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                           {linkifyText(msg.content)}
                         </p>
 
-                        {extractFirstLink(msg.content) && (
+                        {getFirstImageLink(msg.content) && (
+                          <a
+                            href={getFirstImageLink(msg.content) || "#"}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-3 block max-w-xl rounded-2xl border border-[#404249] bg-[#111214] overflow-hidden hover:border-indigo-500/70 transition-all duration-200 shadow-lg shadow-black/20"
+                          >
+                            <img
+                              src={getFirstImageLink(msg.content) || ""}
+                              alt="Resim önizlemesi"
+                              className="max-h-96 w-full object-contain bg-black"
+                              loading="lazy"
+                            />
+
+                            <div className="px-4 py-3 bg-[#232428]">
+                              <p className="text-xs text-indigo-300 font-bold uppercase tracking-wide">
+                                Resim Önizlemesi
+                              </p>
+                              <p className="text-sm text-gray-400 mt-1 break-all">
+                                {getFirstImageLink(msg.content)}
+                              </p>
+                            </div>
+                          </a>
+                        )}
+
+                        {extractFirstLink(msg.content) && !getFirstImageLink(msg.content) && (
                           <a
                             href={extractFirstLink(msg.content) || "#"}
                             target="_blank"
