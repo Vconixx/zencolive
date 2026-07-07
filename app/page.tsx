@@ -127,6 +127,51 @@ function normalizeXPostLink(url: string) {
   return url.replace("https://x.com/", "https://twitter.com/");
 }
 
+function isYouTubeLink(url: string) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace("www.", "");
+
+    return (
+      host === "youtube.com" ||
+      host === "m.youtube.com" ||
+      host === "youtu.be"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function getFirstYouTubeLink(text: string) {
+  const links = text.match(/https?:\/\/[^\s]+/g) || [];
+  return links.find((link) => isYouTubeLink(link)) || null;
+}
+
+function getYouTubeVideoId(url: string) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace("www.", "");
+
+    if (host === "youtu.be") {
+      return parsed.pathname.replace("/", "");
+    }
+
+    if (parsed.searchParams.get("v")) {
+      return parsed.searchParams.get("v");
+    }
+
+    const shortsMatch = parsed.pathname.match(/\/shorts\/([^/?]+)/);
+    if (shortsMatch) return shortsMatch[1];
+
+    const embedMatch = parsed.pathname.match(/\/embed\/([^/?]+)/);
+    if (embedMatch) return embedMatch[1];
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function Avatar({
   username,
   avatarUrl,
@@ -1187,14 +1232,37 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                           </button>
                         )}
 
+                        {getFirstYouTubeLink(msg.content) &&
+                          getYouTubeVideoId(getFirstYouTubeLink(msg.content) || "") && (
+                            <div className="mt-3 w-fit max-w-[430px] rounded-2xl border border-[#404249] bg-[#111214] overflow-hidden shadow-lg shadow-black/20">
+                              <div className="h-1 bg-gradient-to-r from-red-600 to-red-400" />
+
+                              <div className="p-3">
+                                <p className="text-xs text-red-300 font-bold uppercase tracking-wide mb-2">
+                                  YouTube Önizlemesi
+                                </p>
+
+                                <iframe
+                                  className="w-[400px] max-w-full aspect-video rounded-xl bg-black"
+                                  src={`https://www.youtube.com/embed/${getYouTubeVideoId(
+                                    getFirstYouTubeLink(msg.content) || ""
+                                  )}`}
+                                  title="YouTube video önizlemesi"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                  allowFullScreen
+                                />
+                              </div>
+                            </div>
+                          )}
+
                         {getFirstXPostLink(msg.content) && (
-                          <div className="mt-3 max-w-xl rounded-2xl border border-[#404249] bg-[#111214] p-3 overflow-hidden shadow-lg shadow-black/20">
+                          <div className="mt-3 w-fit max-w-[430px] rounded-2xl border border-[#404249] bg-[#111214] p-2 overflow-hidden shadow-lg shadow-black/20">
                             <p className="text-xs text-indigo-300 font-bold uppercase tracking-wide mb-2">
                               X / Twitter Önizlemesi
                             </p>
 
                             <blockquote
-                              className="twitter-tweet"
+                              className="twitter-tweet" data-width="400"
                               data-theme="dark"
                               data-dnt="true"
                             >
@@ -1207,7 +1275,8 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
                         {extractFirstLink(msg.content) &&
                           !getFirstImageLink(msg.content) &&
-                          !getFirstXPostLink(msg.content) && (
+                          !getFirstXPostLink(msg.content) &&
+                          !getFirstYouTubeLink(msg.content) && (
                           <a
                             href={extractFirstLink(msg.content) || "#"}
                             target="_blank"
