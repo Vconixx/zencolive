@@ -501,25 +501,29 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     const groupedReactions = getGroupedReactions(messageId);
 
     return (
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        {groupedReactions.map((reaction) => (
-          <button
-            key={reaction.emoji}
-            onClick={() => toggleReaction(messageId, reaction.emoji)}
-            className={`h-8 rounded-full px-3 text-sm font-bold border transition-all duration-200 hover:scale-105 active:scale-95 ${
-              reaction.reactedByMe
-                ? "bg-indigo-600/25 border-indigo-500 text-white shadow-md shadow-indigo-900/20"
-                : "bg-[#232428] border-[#404249] text-gray-200 hover:border-indigo-500"
-            }`}
-            title="Reaksiyon"
-          >
-            <span className="mr-1">{reaction.emoji}</span>
-            <span>{reaction.count}</span>
-          </button>
-        ))}
+      <div className="relative mt-1">
+        {groupedReactions.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            {groupedReactions.map((reaction) => (
+              <button
+                key={reaction.emoji}
+                onClick={() => toggleReaction(messageId, reaction.emoji)}
+                className={`h-7 rounded-full px-2.5 text-sm font-bold border transition-all duration-200 hover:scale-105 active:scale-95 ${
+                  reaction.reactedByMe
+                    ? "bg-indigo-600/25 border-indigo-500 text-white shadow-md shadow-indigo-900/20"
+                    : "bg-[#232428] border-[#404249] text-gray-200 hover:border-indigo-500"
+                }`}
+                title="Reaksiyon"
+              >
+                <span className="mr-1">{reaction.emoji}</span>
+                <span>{reaction.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
-        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-          <div className="flex items-center gap-1 rounded-full bg-[#232428] border border-[#404249] px-2 py-1 shadow-lg">
+        <div className="pointer-events-none absolute -top-10 left-0 z-20 opacity-0 translate-y-1 group-hover:pointer-events-auto group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200">
+          <div className="flex items-center gap-1 rounded-full bg-[#1f2026] border border-[#404249] px-2 py-1 shadow-xl">
             {reactionEmojis.map((emoji) => (
               <button
                 key={emoji}
@@ -1349,7 +1353,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
             </button>
           </header>
 
-          <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="zenco-scroll flex-1 p-6 space-y-2 overflow-y-auto scroll-smooth">
+          <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="zenco-scroll flex-1 p-5 space-y-0.5 overflow-y-auto scroll-smooth">
             {messages.map((msg) => {
               const profile = getProfileForMessage(msg);
               const displayName = profile?.username || msg.username || "Anonim";
@@ -1362,7 +1366,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
               return (
                 <div
                   key={msg.id}
-                  className="group flex gap-4 rounded-xl px-3 py-2 transition-all duration-200 hover:bg-[#2b2d31]"
+                  className="group relative flex gap-4 rounded-xl px-3 py-1.5 transition-all duration-200 hover:bg-[#2b2d31]"
                 >
                   <div onClick={() => profile && setSelectedProfile(profile)}>
                     <Avatar username={displayName} avatarUrl={displayAvatar} />
