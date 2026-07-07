@@ -155,6 +155,7 @@ export default function Home() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState("");
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [toast, setToast] = useState("");
 const [toastType, setToastType] = useState<"success" | "error" | "info">("success");
 const [confirmModal, setConfirmModal] = useState({
@@ -1012,11 +1013,11 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                         )}
 
                         {getFirstImageLink(msg.content) && (
-                          <a
-                            href={getFirstImageLink(msg.content) || "#"}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-3 block w-fit max-w-[360px] rounded-2xl border border-[#404249] bg-[#111214] overflow-hidden hover:border-indigo-500/70 transition-all duration-200 shadow-lg shadow-black/20"
+                          <button
+                            type="button"
+                            onClick={() => setSelectedImageUrl(getFirstImageLink(msg.content))}
+                            className="mt-3 block w-fit max-w-[360px] rounded-2xl border border-[#404249] bg-[#111214] overflow-hidden hover:border-indigo-500/70 transition-all duration-200 shadow-lg shadow-black/20 text-left"
+                            title="Resmi büyüt"
                           >
                             <img
                               src={getFirstImageLink(msg.content) || ""}
@@ -1035,7 +1036,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                                 </p>
                               </div>
                             )}
-                          </a>
+                          </button>
                         )}
 
                         {extractFirstLink(msg.content) && !getFirstImageLink(msg.content) && (
@@ -1218,6 +1219,50 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                 >
                   Kapat
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {selectedImageUrl && (
+          <div
+            onClick={() => setSelectedImageUrl(null)}
+            className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-sm flex items-center justify-center p-6"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-5xl max-h-[90vh] rounded-2xl overflow-hidden border border-[#404249] bg-[#111214] shadow-2xl animate-[fadeIn_0.15s_ease-out]"
+            >
+              <button
+                onClick={() => setSelectedImageUrl(null)}
+                className="absolute top-3 right-3 z-10 w-10 h-10 rounded-full bg-black/70 hover:bg-red-600 text-white font-black transition"
+                title="Kapat"
+              >
+                ✕
+              </button>
+
+              <img
+                src={selectedImageUrl}
+                alt="Büyük resim"
+                className="max-w-[90vw] max-h-[85vh] object-contain bg-black"
+              />
+
+              <div className="absolute bottom-3 left-3 right-3 flex justify-between gap-3">
+                <button
+                  onClick={() => navigator.clipboard.writeText(selectedImageUrl)}
+                  className="rounded-xl bg-black/70 hover:bg-indigo-600 px-4 py-2 text-sm font-bold transition"
+                >
+                  Linki Kopyala
+                </button>
+
+                <a
+                  href={selectedImageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-xl bg-black/70 hover:bg-[#404249] px-4 py-2 text-sm font-bold transition"
+                >
+                  Yeni Sekmede Aç
+                </a>
               </div>
             </div>
           </div>
