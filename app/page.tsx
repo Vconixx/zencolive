@@ -234,9 +234,13 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   const [createChannelType, setCreateChannelType] =
     useState<ChannelType>("text");
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
 
   const activeServer =
     servers.find((server) => server.id === activeServerId) || servers[0];
@@ -252,8 +256,55 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
   function scrollToBottom(behavior: ScrollBehavior = "smooth") {
     setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior });
+      messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
+      isNearBottomRef.current = true;
+      setUnreadCount(0);
     }, 100);
+  }
+
+  function handleMessagesScroll() {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const nearBottom = distanceFromBottom < 160;
+
+    isNearBottomRef.current = nearBottom;
+
+    if (nearBottom) {
+      setUnreadCount(0);
+    }
+  }
+
+  function playNotificationSound() {
+    if (!soundEnabled) return;
+
+    try {
+      const AudioContextClass =
+        window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+
+      if (!AudioContextClass) return;
+
+      const audioContext = new AudioContextClass();
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(660, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(880, audioContext.currentTime + 0.08);
+
+      gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.12, audioContext.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.22);
+
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.24);
+    } catch {
+      // Tarayıcı otomatik sesi engellerse sessiz geç.
+    }
   }
 
   function getProfileForMessage(msg: Message) {
@@ -732,6 +783,8 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   }, [activeServerId]);
 
   useEffect(() => {
+    setUnreadCount(0);
+    isNearBottomRef.current = true;
     getMessages();
   }, [activeServerId, activeChannelId]);
 
@@ -751,8 +804,20 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
               newMessage.server_id === activeServerId &&
               newMessage.channel_uuid === activeChannelId
             ) {
+              const ownMessage = newMessage.user_id === currentUserId;
+              const shouldScroll = isNearBottomRef.current || ownMessage;
+
               setMessages((prev) => [...prev, newMessage]);
-              scrollToBottom("smooth");
+
+              if (shouldScroll) {
+                scrollToBottom("smooth");
+              } else {
+                setUnreadCount((prev) => prev + 1);
+              }
+
+              if (!ownMessage) {
+                playNotificationSound();
+              }
             }
           }
 
@@ -979,6 +1044,8 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     setActiveChannelId(channelId);
     setEditingId(null);
     setContent("");
+    setUnreadCount(0);
+    isNearBottomRef.current = true;
   }}
   onLogout={logout}
 />
@@ -987,10 +1054,20 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           <header className="h-14 bg-[#313338]/95 backdrop-blur border-b border-[#1e1f22] flex items-center px-6 shadow-sm">
             <h2 className="font-bold"># {activeChannelName}</h2>
 
-            
+            <button
+              onClick={() => setSoundEnabled((prev) => !prev)}
+              className={`ml-auto px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                soundEnabled
+                  ? "bg-indigo-600/20 text-indigo-200 hover:bg-indigo-600/30"
+                  : "bg-[#404249] text-gray-300 hover:bg-[#50535a]"
+              }`}
+              title="Bildirim sesi"
+            >
+              {soundEnabled ? "🔔 Bildirim Açık" : "🔕 Bildirim Kapalı"}
+            </button>
           </header>
 
-          <div className="zenco-scroll flex-1 p-6 space-y-2 overflow-y-auto scroll-smooth">
+          <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="zenco-scroll flex-1 p-6 space-y-2 overflow-y-auto scroll-smooth">
             {messages.map((msg) => {
               const profile = getProfileForMessage(msg);
               const displayName = profile?.username || msg.username || "Anonim";
@@ -1171,6 +1248,17 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
             <div ref={messagesEndRef} />
           </div>
+
+          {unreadCount > 0 && (
+            <div className="px-5 pb-3 bg-[#313338]/95">
+              <button
+                onClick={() => scrollToBottom("smooth")}
+                className="mx-auto block rounded-full bg-indigo-600 hover:bg-indigo-700 px-5 py-2 text-sm font-black shadow-lg shadow-indigo-900/40 transition-all duration-200 hover:scale-[1.03]"
+              >
+                {unreadCount} yeni mesaj ↓
+              </button>
+            </div>
+          )}
 
           <div className="p-5 bg-[#313338]/95 backdrop-blur border-t border-[#1e1f22]">
             <input
