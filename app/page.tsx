@@ -9,6 +9,7 @@ import CreateServerModal from "../components/CreateServerModal";
 import CreateChannelModal from "../components/CreateChannelModal";
 import JoinServerModal from "../components/JoinServerModal";
 import ServerActionModal from "../components/ServerActionModal";
+import Toast from "../components/Toast";
 
 type ChannelType = "text" | "voice";
 
@@ -101,6 +102,17 @@ export default function Home() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState("");
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
+  const [toast, setToast] = useState("");
+const [toastType, setToastType] = useState<"success" | "error" | "info">("success");
+
+function showToast(message: string, type: "success" | "error" | "info" = "success") {
+  setToast(message);
+  setToastType(type);
+
+  setTimeout(() => {
+    setToast("");
+  }, 2500);
+}
 
   const [loading, setLoading] = useState(true);
   const [serverActionOpen, setServerActionOpen] = useState(false);
@@ -616,41 +628,110 @@ export default function Home() {
         />
 
         <ChannelSidebar
-          activeServer={activeServer}
-          textChannels={textChannels}
-          voiceChannels={voiceChannels}
-          activeChannelId={activeChannelId}
-          username={username}
-          avatarUrl={avatarUrl}
-          currentRole={currentRole}
-          canManageChannels={canManageChannels}
-          onCreateTextChannel={() => openCreateChannel("text")}
-          onCreateVoiceChannel={() => openCreateChannel("voice")}
-          onDeleteTextChannel={deleteTextChannel}
-          onDeleteVoiceChannel={deleteVoiceChannel}
-          onSelectChannel={(channelId) => {
-            setActiveChannelId(channelId);
-            setEditingId(null);
-            setContent("");
-          }}
-          onLogout={logout}
-        />
+  activeServer={activeServer}
+  textChannels={textChannels}
+  voiceChannels={voiceChannels}
+  activeChannelId={activeChannelId}
+  username={username}
+  avatarUrl={avatarUrl}
+  currentRole={currentRole}
+  canManageChannels={canManageChannels}
+  isOwner={activeServer?.owner_id === currentUserId}
+  inviteCode={activeServer?.invite_code}
+  onCopyInvite={() => {
+    if (!activeServer?.invite_code) return;
+    navigator.clipboard.writeText(activeServer.invite_code);
+    showToast("Davet kodu kopyalandı: " + activeServer.invite_code, "success");
+  }}
+  onRegenerateInvite={async () => {
+    if (!activeServer) return;
+
+    const newCode = generateInviteCode();
+
+    const { error } = await supabase
+      .from("servers")
+      .update({ invite_code: newCode })
+      .eq("id", activeServer.id);
+
+    if (error) {
+      showToast("Davet kodu yenilenemedi.", "error");
+      return;
+    }
+
+    setServers((prev) =>
+      prev.map((server) =>
+        server.id === activeServer.id
+          ? { ...server, invite_code: newCode }
+          : server
+      )
+    );
+
+    showToast("Yeni davet kodu oluşturuldu: " + newCode, "success");
+  }}
+  onLeaveServer={async () => {
+    if (!activeServer) return;
+
+    const ok = confirm(`${activeServer.name} sunucusundan ayrılmak istiyor musun?`);
+    if (!ok) return;
+
+    const { error } = await supabase
+      .from("server_members")
+      .delete()
+      .eq("server_id", activeServer.id)
+      .eq("user_id", currentUserId);
+
+    if (error) {
+      showToast("Sunucudan ayrılamadın.", "error");
+      return;
+    }
+
+    showToast("Sunucudan ayrıldın.", "success");
+    setActiveServerId("");
+    setActiveChannelId("");
+    setMessages([]);
+    await getServers();
+  }}
+  onDeleteServer={async () => {
+    if (!activeServer) return;
+
+    const ok = confirm(
+      `${activeServer.name} sunucusu kalıcı olarak silinsin mi? Bu işlem geri alınamaz.`
+    );
+    if (!ok) return;
+
+    const { error } = await supabase
+      .from("servers")
+      .delete()
+      .eq("id", activeServer.id);
+
+    if (error) {
+      showToast("Sunucu silinemedi.", "error");
+      return;
+    }
+
+    showToast("Sunucu silindi.", "success");
+    setActiveServerId("");
+    setActiveChannelId("");
+    setMessages([]);
+    await getServers();
+  }}
+  onCreateTextChannel={() => openCreateChannel("text")}
+  onCreateVoiceChannel={() => openCreateChannel("voice")}
+  onDeleteTextChannel={deleteTextChannel}
+  onDeleteVoiceChannel={deleteVoiceChannel}
+  onSelectChannel={(channelId) => {
+    setActiveChannelId(channelId);
+    setEditingId(null);
+    setContent("");
+  }}
+  onLogout={logout}
+/>
 
         <section className="flex-1 flex flex-col h-screen">
           <header className="h-14 bg-[#313338]/95 backdrop-blur border-b border-[#1e1f22] flex items-center px-6 shadow-sm">
             <h2 className="font-bold"># {activeChannelName}</h2>
 
-            {activeServer?.owner_id === currentUserId && activeServer?.invite_code && (
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(activeServer.invite_code || "");
-                  alert("Davet kodu kopyalandı: " + activeServer.invite_code);
-                }}
-                className="ml-auto bg-[#404249] hover:bg-indigo-600 px-3 py-1.5 rounded-lg text-xs font-bold transition"
-              >
-                Davet Kodu: {activeServer.invite_code}
-              </button>
-            )}
+            
           </header>
 
           <div className="zenco-scroll flex-1 p-6 space-y-2 overflow-y-auto scroll-smooth">
@@ -853,6 +934,7 @@ export default function Home() {
           onClose={() => setCreateChannelOpen(false)}
           onCreate={createChannel}
         />
+        <Toast message={toast} type={toastType} />
       </main>
     </>
   );

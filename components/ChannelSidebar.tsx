@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import VoiceRoom from "./VoiceRoom";
+import ServerMenu from "./ServerMenu";
 
 type Server = {
   id: string;
@@ -30,6 +32,12 @@ type Props = {
   onDeleteTextChannel: (id: string, name: string) => void;
   onDeleteVoiceChannel: (id: string, name: string) => void;
   onSelectChannel: (id: string) => void;
+  isOwner: boolean;
+  inviteCode?: string | null;
+  onCopyInvite: () => void;
+  onRegenerateInvite: () => void;
+  onLeaveServer: () => void;
+  onDeleteServer: () => void;
   onLogout: () => void;
 };
 
@@ -71,13 +79,49 @@ export default function ChannelSidebar({
   onDeleteTextChannel,
   onDeleteVoiceChannel,
   onSelectChannel,
+  isOwner,
+  inviteCode,
+  onCopyInvite,
+  onRegenerateInvite,
+  onLeaveServer,
+  onDeleteServer,
   onLogout,
 }: Props) {
+  const [serverMenuOpen, setServerMenuOpen] = useState(false);
+
   return (
     <aside className="w-64 bg-[#2b2d31] p-4 flex flex-col border-r border-black/30 shadow-xl">
-      <h1 className="text-xl font-bold border-b border-[#1e1f22] pb-4 truncate">
-        {activeServer?.name || "ZencoLive"}
-      </h1>
+      <div className="relative border-b border-[#1e1f22] pb-4">
+        <button
+          onClick={() => setServerMenuOpen((prev) => !prev)}
+          className="w-full text-left text-xl font-bold truncate hover:text-indigo-300 transition flex items-center justify-between gap-2"
+        >
+          <span className="truncate">{activeServer?.name || "ZencoLive"}</span>
+          <span className="text-sm text-gray-400">⌄</span>
+        </button>
+
+        <ServerMenu
+          open={serverMenuOpen}
+          isOwner={isOwner}
+          inviteCode={inviteCode}
+          onCopyInvite={() => {
+            setServerMenuOpen(false);
+            onCopyInvite();
+          }}
+          onRegenerateInvite={() => {
+            setServerMenuOpen(false);
+            onRegenerateInvite();
+          }}
+          onLeaveServer={() => {
+            setServerMenuOpen(false);
+            onLeaveServer();
+          }}
+          onDeleteServer={() => {
+            setServerMenuOpen(false);
+            onDeleteServer();
+          }}
+        />
+      </div>
 
       <div className="mt-5">
         <div className="flex items-center justify-between mb-2">
