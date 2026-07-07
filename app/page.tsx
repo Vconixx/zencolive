@@ -74,6 +74,19 @@ function linkifyText(text: string) {
   });
 }
 
+function extractFirstLink(text: string) {
+  const match = text.match(/https?:\/\/[^\s]+/);
+  return match ? match[0] : null;
+}
+
+function getLinkHost(url: string) {
+  try {
+    return new URL(url).hostname.replace("www.", "");
+  } catch {
+    return "bağlantı";
+  }
+}
+
 function Avatar({
   username,
   avatarUrl,
@@ -914,9 +927,44 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                         </div>
                       </div>
                     ) : (
-                      <p className="text-gray-300 leading-relaxed">
-                        {linkifyText(msg.content)}
-                      </p>
+                      <div>
+                        <p className="text-gray-300 leading-relaxed break-words">
+                          {linkifyText(msg.content)}
+                        </p>
+
+                        {extractFirstLink(msg.content) && (
+                          <a
+                            href={extractFirstLink(msg.content) || "#"}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-3 block max-w-xl rounded-2xl border border-[#404249] bg-[#232428] overflow-hidden hover:border-indigo-500/70 hover:bg-[#292b31] transition-all duration-200 hover:translate-x-1 shadow-lg shadow-black/10"
+                          >
+                            <div className="h-1 bg-gradient-to-r from-indigo-500 to-purple-600" />
+
+                            <div className="p-4">
+                              <div className="flex items-start gap-3">
+                                <div className="w-11 h-11 rounded-xl bg-indigo-600/20 flex items-center justify-center text-xl">
+                                  🔗
+                                </div>
+
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs text-indigo-300 font-bold uppercase tracking-wide">
+                                    Bağlantı Önizlemesi
+                                  </p>
+
+                                  <p className="text-white font-bold mt-1 truncate">
+                                    {getLinkHost(extractFirstLink(msg.content) || "")}
+                                  </p>
+
+                                  <p className="text-sm text-gray-400 mt-1 break-all line-clamp-2">
+                                    {extractFirstLink(msg.content)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </a>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
