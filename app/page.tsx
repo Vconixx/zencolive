@@ -105,6 +105,28 @@ function isOnlyImageMessage(text: string) {
   return trimmed === imageLink;
 }
 
+function isXPostLink(url: string) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace("www.", "");
+    return (
+      (host === "x.com" || host === "twitter.com") &&
+      parsed.pathname.includes("/status/")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function getFirstXPostLink(text: string) {
+  const links = text.match(/https?:\/\/[^\s]+/g) || [];
+  return links.find((link) => isXPostLink(link)) || null;
+}
+
+function normalizeXPostLink(url: string) {
+  return url.replace("https://x.com/", "https://twitter.com/");
+}
+
 function Avatar({
   username,
   avatarUrl,
@@ -768,6 +790,41 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     };
   }, [activeServerId, activeChannelId]);
 
+  useEffect(() => {
+    const hasXPost = messages.some((msg) => getFirstXPostLink(msg.content));
+
+    if (!hasXPost) return;
+
+    const existingScript = document.querySelector(
+      'script[src="https://platform.twitter.com/widgets.js"]'
+    );
+
+    function loadWidgets() {
+      const twitterWindow = window as typeof window & {
+        twttr?: {
+          widgets?: {
+            load: () => void;
+          };
+        };
+      };
+
+      twitterWindow.twttr?.widgets?.load();
+    }
+
+    if (existingScript) {
+      loadWidgets();
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://platform.twitter.com/widgets.js";
+    script.async = true;
+    script.charset = "utf-8";
+    script.onload = loadWidgets;
+
+    document.body.appendChild(script);
+  }, [messages]);
+
   if (loading) {
     return (
       <main className="min-h-screen bg-[#313338] text-white flex items-center justify-center">
@@ -1053,7 +1110,27 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                           </button>
                         )}
 
-                        {extractFirstLink(msg.content) && !getFirstImageLink(msg.content) && (
+                        {getFirstXPostLink(msg.content) && (
+                          <div className="mt-3 max-w-xl rounded-2xl border border-[#404249] bg-[#111214] p-3 overflow-hidden shadow-lg shadow-black/20">
+                            <p className="text-xs text-indigo-300 font-bold uppercase tracking-wide mb-2">
+                              X / Twitter Önizlemesi
+                            </p>
+
+                            <blockquote
+                              className="twitter-tweet"
+                              data-theme="dark"
+                              data-dnt="true"
+                            >
+                              <a href={normalizeXPostLink(getFirstXPostLink(msg.content) || "")}>
+                                {normalizeXPostLink(getFirstXPostLink(msg.content) || "")}
+                              </a>
+                            </blockquote>
+                          </div>
+                        )}
+
+                        {extractFirstLink(msg.content) &&
+                          !getFirstImageLink(msg.content) &&
+                          !getFirstXPostLink(msg.content) && (
                           <a
                             href={extractFirstLink(msg.content) || "#"}
                             target="_blank"
