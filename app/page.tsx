@@ -1016,12 +1016,12 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                             href={getFirstImageLink(msg.content) || "#"}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="mt-3 block max-w-xl rounded-2xl border border-[#404249] bg-[#111214] overflow-hidden hover:border-indigo-500/70 transition-all duration-200 shadow-lg shadow-black/20"
+                            className="mt-3 block w-fit max-w-[360px] rounded-2xl border border-[#404249] bg-[#111214] overflow-hidden hover:border-indigo-500/70 transition-all duration-200 shadow-lg shadow-black/20"
                           >
                             <img
                               src={getFirstImageLink(msg.content) || ""}
                               alt="Resim önizlemesi"
-                              className="max-h-96 w-full object-contain bg-black"
+                              className="max-h-[280px] max-w-[360px] object-contain bg-black"
                               loading="lazy"
                             />
 
