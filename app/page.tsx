@@ -455,20 +455,45 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
         .eq("id", existingReaction.id);
 
       if (error) {
-        showToast("Reaksiyon kaldırılamadı.", "error");
+        showToast("Reaksiyon kaldırılamadı: " + error.message, "error");
+        return;
       }
+
+      setMessageReactions((prev) =>
+        prev.filter((reaction) => reaction.id !== existingReaction.id)
+      );
 
       return;
     }
 
-    const { error } = await supabase.from("message_reactions").insert({
-      message_id: messageId,
-      user_id: currentUserId,
-      emoji,
-    });
+    const { data, error } = await supabase
+      .from("message_reactions")
+      .insert({
+        message_id: messageId,
+        user_id: currentUserId,
+        emoji,
+      })
+      .select("id, message_id, user_id, emoji")
+      .single();
 
     if (error) {
-      showToast("Reaksiyon eklenemedi.", "error");
+      if (error.code === "23505") {
+        await getReactions(messages.map((message) => message.id));
+        return;
+      }
+
+      showToast("Reaksiyon eklenemedi: " + error.message, "error");
+      return;
+    }
+
+    if (data) {
+      setMessageReactions((prev) => {
+        const alreadyExists = prev.some((reaction) => reaction.id === data.id);
+
+        if (alreadyExists) return prev;
+
+        return [...prev, data];
+      });
     }
   }
 
