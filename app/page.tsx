@@ -7,6 +7,8 @@ import ServerSidebar from "../components/ServerSidebar";
 import ChannelSidebar from "../components/ChannelSidebar";
 import CreateServerModal from "../components/CreateServerModal";
 import CreateChannelModal from "../components/CreateChannelModal";
+import JoinServerModal from "../components/JoinServerModal";
+import ServerActionModal from "../components/ServerActionModal";
 
 type ChannelType = "text" | "voice";
 
@@ -35,6 +37,7 @@ type Server = {
   name: string;
   owner_id: string | null;
   icon_url: string | null;
+  invite_code: string | null;
 };
 
 type Channel = {
@@ -43,6 +46,10 @@ type Channel = {
   name: string;
   type: string;
 };
+
+function generateInviteCode() {
+  return Math.random().toString(36).slice(2, 10).toUpperCase();
+}
 
 function Avatar({
   username,
@@ -96,6 +103,8 @@ export default function Home() {
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
 
   const [loading, setLoading] = useState(true);
+  const [serverActionOpen, setServerActionOpen] = useState(false);
+  const [joinServerOpen, setJoinServerOpen] = useState(false);
   const [createServerOpen, setCreateServerOpen] = useState(false);
   const [createServerLoading, setCreateServerLoading] = useState(false);
   const [createChannelOpen, setCreateChannelOpen] = useState(false);
@@ -157,16 +166,37 @@ export default function Home() {
   }
 
   async function getServers() {
+    if (!currentUserId) return;
+
+    const { data: memberships } = await supabase
+      .from("server_members")
+      .select("server_id")
+      .eq("user_id", currentUserId);
+
+    const memberServerIds = (memberships || []).map((m) => m.server_id);
+
     const { data, error } = await supabase
       .from("servers")
-      .select("id, name, owner_id, icon_url")
+      .select("id, name, owner_id, icon_url, invite_code")
       .order("created_at", { ascending: true });
 
     if (!error && data) {
-      setServers(data);
+      const visibleServers = data.filter(
+        (server) =>
+          server.owner_id === currentUserId || memberServerIds.includes(server.id)
+      );
 
-      if (!activeServerId && data.length > 0) {
-        setActiveServerId(data[0].id);
+      setServers(visibleServers);
+
+      if (!activeServerId && visibleServers.length > 0) {
+        setActiveServerId(visibleServers[0].id);
+      }
+
+      if (
+        activeServerId &&
+        !visibleServers.some((server) => server.id === activeServerId)
+      ) {
+        setActiveServerId(visibleServers[0]?.id || "");
       }
     }
   }
@@ -214,8 +244,9 @@ export default function Home() {
         name: serverName,
         owner_id: currentUserId,
         icon_url: null,
+        invite_code: generateInviteCode(),
       })
-      .select("id, name, owner_id, icon_url")
+      .select("id, name, owner_id, icon_url, invite_code")
       .single();
 
     if (serverError || !serverData) {
@@ -580,7 +611,7 @@ export default function Home() {
             setEditingId(null);
             setContent("");
           }}
-          onCreateServer={() => setCreateServerOpen(true)}
+          onCreateServer={() => setServerActionOpen(true)}
           onOpenSettings={() => router.push("/settings")}
         />
 
@@ -608,6 +639,18 @@ export default function Home() {
         <section className="flex-1 flex flex-col h-screen">
           <header className="h-14 bg-[#313338]/95 backdrop-blur border-b border-[#1e1f22] flex items-center px-6 shadow-sm">
             <h2 className="font-bold"># {activeChannelName}</h2>
+
+            {activeServer?.owner_id === currentUserId && activeServer?.invite_code && (
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(activeServer.invite_code || "");
+                  alert("Davet kodu kopyalandı: " + activeServer.invite_code);
+                }}
+                className="ml-auto bg-[#404249] hover:bg-indigo-600 px-3 py-1.5 rounded-lg text-xs font-bold transition"
+              >
+                Davet Kodu: {activeServer.invite_code}
+              </button>
+            )}
           </header>
 
           <div className="zenco-scroll flex-1 p-6 space-y-2 overflow-y-auto scroll-smooth">
@@ -781,6 +824,20 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        <ServerActionModal
+          open={serverActionOpen}
+          onClose={() => setServerActionOpen(false)}
+          onCreateServer={() => setCreateServerOpen(true)}
+          onJoinServer={() => setJoinServerOpen(true)}
+        />
+
+        <JoinServerModal
+          open={joinServerOpen}
+          onClose={() => setJoinServerOpen(false)}
+          userId={currentUserId}
+          onJoined={getServers}
+        />
 
         <CreateServerModal
           open={createServerOpen}
