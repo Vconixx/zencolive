@@ -93,9 +93,9 @@ export default function ChannelSidebar({
     <aside className="w-64 bg-[#2b2d31] p-4 flex flex-col border-r border-black/30 shadow-xl">
       <div className="relative border-b border-[#1e1f22] pb-4">
         <button
-          onClick={() => setServerMenuOpen((prev) => !prev)}
-          className="w-full text-left text-xl font-bold truncate hover:text-indigo-300 transition flex items-center justify-between gap-2"
-        >
+  onClick={() => setServerMenuOpen((prev) => !prev)}
+  className="w-full px-3 py-3 rounded-xl bg-[#232428] hover:bg-[#363940] text-left text-lg font-bold transition flex items-center justify-between gap-2 border border-[#3b3d44]"
+>
           <span className="truncate">{activeServer?.name || "ZencoLive"}</span>
           <span className="text-sm text-gray-400">⌄</span>
         </button>
