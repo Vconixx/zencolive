@@ -203,6 +203,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     useState<ChannelType>("text");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeServer =
     servers.find((server) => server.id === activeServerId) || servers[0];
@@ -519,6 +520,63 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     if (!error && data) {
       setMessages(data);
       scrollToBottom("auto");
+    }
+  }
+
+  async function uploadMessageFile(file: File) {
+    if (!activeServerId || !activeChannelId) return;
+
+    const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"];
+
+    if (!allowedTypes.includes(file.type)) {
+      showToast("Şimdilik sadece resim yükleyebilirsin.", "error");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Resim en fazla 5 MB olabilir.", "error");
+      return;
+    }
+
+    const fileExt = file.name.split(".").pop() || "png";
+    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
+    const filePath = `${activeServerId}/${activeChannelId}/${fileName}`;
+
+    showToast("Resim yükleniyor...", "info");
+
+    const { error: uploadError } = await supabase.storage
+      .from("message-files")
+      .upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      showToast("Resim yüklenemedi: " + uploadError.message, "error");
+      return;
+    }
+
+    const { data } = supabase.storage.from("message-files").getPublicUrl(filePath);
+    const publicUrl = data.publicUrl;
+
+    const { error: messageError } = await supabase.from("messages").insert({
+      username,
+      user_id: currentUserId,
+      server_id: activeServerId,
+      channel_uuid: activeChannelId,
+      channel_id: activeChannelName,
+      content: publicUrl,
+    });
+
+    if (messageError) {
+      showToast("Resim mesaja eklenemedi: " + messageError.message, "error");
+      return;
+    }
+
+    showToast("Resim gönderildi.", "success");
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
   }
 
@@ -1009,6 +1067,25 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           </div>
 
           <div className="p-5 flex gap-3 bg-[#313338]/95 backdrop-blur border-t border-[#1e1f22]">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) uploadMessageFile(file);
+              }}
+            />
+
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              title="Resim yükle"
+              className="bg-[#383a40] hover:bg-[#4b4d55] px-4 rounded-xl font-bold transition-all duration-200 hover:scale-[1.03] border border-transparent hover:border-indigo-500"
+            >
+              📎
+            </button>
+
             <input
               className="flex-1 bg-[#383a40] rounded-xl px-4 py-3 text-white outline-none border border-transparent focus:border-indigo-500 transition-all duration-200"
               value={content}
