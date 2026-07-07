@@ -204,7 +204,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       profile?.username ||
       data.user.user_metadata?.username ||
       data.user.email?.split("@")[0] ||
-      "KullanÄ±cÄ±";
+      "Kullanıcı";
 
     setUsername(name);
     setAvatarUrl(profile?.avatar_url || null);
@@ -298,7 +298,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
     if (serverError || !serverData) {
       setCreateServerLoading(false);
-      showToast("Sunucu oluÅŸturulamadÄ±: " + serverError?.message, "error");
+      showToast("Sunucu oluşturulamadı: " + serverError?.message, "error");
       return;
     }
 
@@ -310,7 +310,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
     if (memberError) {
       setCreateServerLoading(false);
-      showToast("Sunucu Ã¼yeliÄŸi oluÅŸturulamadÄ±: " + memberError.message, "error");
+      showToast("Sunucu üyeliği oluşturulamadı: " + memberError.message, "error");
       return;
     }
 
@@ -321,7 +321,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     setCreateServerOpen(false);
     setCreateServerLoading(false);
 
-    showToast("Sunucu oluÅŸturuldu.", "success");
+    showToast("Sunucu oluşturuldu.", "success");
     await getChannels(serverData.id);
   }
 
@@ -334,7 +334,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     if (!activeServerId) return;
 
     if (!canManageChannels) {
-      showToast("Kanal oluÅŸturma yetkin yok.", "error");
+      showToast("Kanal oluşturma yetkin yok.", "error");
       return;
     }
 
@@ -353,7 +353,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     setCreateChannelLoading(false);
 
     if (error || !data) {
-      showToast("Kanal oluÅŸturulamadÄ±: " + error?.message, "error");
+      showToast("Kanal oluşturulamadı: " + error?.message, "error");
       return;
     }
 
@@ -361,10 +361,10 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       setTextChannels((prev) => [...prev, data]);
       setActiveChannelId(data.id);
       setMessages([]);
-      showToast(`#${data.name} metin kanalÄ± oluÅŸturuldu.`, "success");
+      showToast(`#${data.name} metin kanalı oluşturuldu.`, "success");
     } else {
       setVoiceChannels((prev) => [...prev, data]);
-      showToast(`ğŸ”Š ${data.name} ses kanalÄ± oluÅŸturuldu.`, "success");
+      showToast(`🔊 ${data.name} ses kanalı oluşturuldu.`, "success");
     }
 
     setCreateChannelOpen(false);
@@ -379,14 +379,14 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     }
 
     if (textChannels.length <= 1) {
-      showToast("Son metin kanalÄ±nÄ± silemezsin.", "error");
+      showToast("Son metin kanalını silemezsin.", "error");
       return;
     }
 
     openConfirm({
-      title: "Metin kanalÄ± silinsin mi?",
-      description: `#${channelName} kanalÄ± kalÄ±cÄ± olarak silinecek.`,
-      confirmText: "KanalÄ± Sil",
+      title: "Metin kanalı silinsin mi?",
+      description: `#${channelName} kanalı kalıcı olarak silinecek.`,
+      confirmText: "Kanalı Sil",
       danger: true,
       onConfirm: async () => {
         const { error } = await supabase
@@ -407,26 +407,26 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           setMessages([]);
         }
 
-        showToast(`#${channelName} kanalÄ± silindi.`, "success");
+        showToast(`#${channelName} kanalı silindi.`, "success");
       },
     });
   }
 
   async function deleteVoiceChannel(channelId: string, channelName: string) {
     if (!canManageChannels) {
-      showToast("Ses kanalÄ± silme yetkin yok.", "error");
+      showToast("Ses kanalı silme yetkin yok.", "error");
       return;
     }
 
     if (voiceChannels.length <= 1) {
-      showToast("Son ses kanalÄ±nÄ± silemezsin.", "error");
+      showToast("Son ses kanalını silemezsin.", "error");
       return;
     }
 
     openConfirm({
-      title: "Ses kanalÄ± silinsin mi?",
-      description: `ğŸ”Š ${channelName} ses kanalÄ± kalÄ±cÄ± olarak silinecek.`,
-      confirmText: "Ses KanalÄ±nÄ± Sil",
+      title: "Ses kanalı silinsin mi?",
+      description: `🔊 ${channelName} ses kanalı kalıcı olarak silinecek.`,
+      confirmText: "Ses Kanalını Sil",
       danger: true,
       onConfirm: async () => {
         const { error } = await supabase
@@ -435,12 +435,12 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           .eq("id", channelId);
 
         if (error) {
-          showToast("Ses kanalÄ± silinemedi: " + error.message, "error");
+          showToast("Ses kanalı silinemedi: " + error.message, "error");
           return;
         }
 
         setVoiceChannels((prev) => prev.filter((c) => c.id !== channelId));
-        showToast(`ğŸ”Š ${channelName} ses kanalÄ± silindi.`, "success");
+        showToast(`🔊 ${channelName} ses kanalı silindi.`, "success");
       },
     });
   }
@@ -493,7 +493,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     });
 
     if (error) {
-      showToast("Mesaj gÃ¶nderilemedi: " + error.message, "error");
+      showToast("Mesaj gönderilemedi: " + error.message, "error");
       return;
     }
 
@@ -504,14 +504,14 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     const canDelete = msg.user_id === currentUserId || currentRole === "admin";
 
     if (!canDelete) {
-      showToast("Bu mesajÄ± silme yetkin yok.", "error");
+      showToast("Bu mesajı silme yetkin yok.", "error");
       return;
     }
 
     openConfirm({
       title: "Mesaj silinsin mi?",
-      description: "Bu mesaj kalÄ±cÄ± olarak silinecek.",
-      confirmText: "MesajÄ± Sil",
+      description: "Bu mesaj kalıcı olarak silinecek.",
+      confirmText: "Mesajı Sil",
       danger: true,
       onConfirm: async () => {
         const { error } = await supabase
@@ -531,7 +531,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
   async function saveEdit(msg: Message) {
     if (msg.user_id !== currentUserId) {
-      showToast("Sadece kendi mesajÄ±nÄ± dÃ¼zenleyebilirsin.", "error");
+      showToast("Sadece kendi mesajını düzenleyebilirsin.", "error");
       return;
     }
 
@@ -546,7 +546,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       .eq("id", msg.id);
 
     if (error) {
-      showToast("Mesaj dÃ¼zenlenemedi: " + error.message, "error");
+      showToast("Mesaj düzenlenemedi: " + error.message, "error");
       return;
     }
 
@@ -645,7 +645,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   if (loading) {
     return (
       <main className="min-h-screen bg-[#313338] text-white flex items-center justify-center">
-        <p>YÃ¼kleniyor...</p>
+        <p>Yükleniyor...</p>
       </main>
     );
   }
@@ -706,7 +706,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   onCopyInvite={() => {
     if (!activeServer?.invite_code) return;
     navigator.clipboard.writeText(activeServer.invite_code);
-    showToast("Davet kodu kopyalandÄ±: " + activeServer.invite_code, "success");
+    showToast("Davet kodu kopyalandı: " + activeServer.invite_code, "success");
   }}
   onRegenerateInvite={async () => {
     if (!activeServer) return;
@@ -731,15 +731,15 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       )
     );
 
-    showToast("Yeni davet kodu oluÅŸturuldu: " + newCode, "success");
+    showToast("Yeni davet kodu oluşturuldu: " + newCode, "success");
   }}
   onLeaveServer={() => {
     if (!activeServer) return;
 
     openConfirm({
-      title: "Sunucudan ayrÄ±l?",
-      description: `${activeServer.name} sunucusundan ayrÄ±lacaksÄ±n. Tekrar katÄ±lmak iÃ§in davet kodu gerekir.`,
-      confirmText: "AyrÄ±l",
+      title: "Sunucudan ayrıl?",
+      description: `${activeServer.name} sunucusundan ayrılacaksın. Tekrar katılmak için davet kodu gerekir.`,
+      confirmText: "Ayrıl",
       danger: true,
       onConfirm: async () => {
         const { error } = await supabase
@@ -749,11 +749,11 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           .eq("user_id", currentUserId);
 
         if (error) {
-          showToast("Sunucudan ayrÄ±lamadÄ±n.", "error");
+          showToast("Sunucudan ayrılamadın.", "error");
           return;
         }
 
-        showToast("Sunucudan ayrÄ±ldÄ±n.", "success");
+        showToast("Sunucudan ayrıldın.", "success");
         setActiveServerId("");
         setActiveChannelId("");
         setMessages([]);
@@ -766,7 +766,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
     openConfirm({
       title: "Sunucu silinsin mi?",
-      description: `${activeServer.name} sunucusu kalÄ±cÄ± olarak silinecek. Bu iÅŸlem geri alÄ±namaz.`,
+      description: `${activeServer.name} sunucusu kalıcı olarak silinecek. Bu işlem geri alınamaz.`,
       confirmText: "Sunucuyu Sil",
       danger: true,
       onConfirm: async () => {
@@ -837,7 +837,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
                       <span className="text-xs text-gray-400">
                         {new Date(msg.created_at).toLocaleString("tr-TR")}
-                        {msg.edited_at && " Â· dÃ¼zenlendi"}
+                        {msg.edited_at && " · düzenlendi"}
                       </span>
 
                       {(canEdit || canDelete) && (
@@ -847,7 +847,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                               onClick={() => startEdit(msg)}
                               className="text-xs text-blue-400 hover:underline"
                             >
-                              DÃ¼zenle
+                              Düzenle
                             </button>
                           )}
 
@@ -888,7 +888,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                             onClick={cancelEdit}
                             className="text-xs bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded"
                           >
-                            Ä°ptal
+                            İptal
                           </button>
                         </div>
                       </div>
@@ -913,14 +913,14 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
               onKeyDown={(e) => {
                 if (e.key === "Enter") sendMessage();
               }}
-              placeholder={`#${activeChannelName} kanalÄ±na mesaj gÃ¶nder...`}
+              placeholder={`#${activeChannelName} kanalına mesaj gönder...`}
             />
 
             <button
               onClick={sendMessage}
               className="bg-indigo-600 hover:bg-indigo-700 px-5 rounded-xl font-bold transition-all duration-200 hover:scale-[1.03] shadow-lg shadow-indigo-900/30"
             >
-              GÃ¶nder
+              Gönder
             </button>
           </div>
         </section>
@@ -956,15 +956,15 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                   {selectedProfile.username}
                 </h2>
                 <p className="text-sm text-green-400 mt-1">
-                  {selectedProfile.role === "admin" ? "Admin" : "Ã‡evrimiÃ§i"}
+                  {selectedProfile.role === "admin" ? "Admin" : "Çevrimiçi"}
                 </p>
 
                 <div className="mt-5 bg-[#232428] rounded-xl p-4">
                   <p className="text-xs text-gray-400 font-bold mb-1">
-                    ZENCOLIVE PROFÄ°LÄ°
+                    ZENCOLIVE PROFİLİ
                   </p>
                   <p className="text-sm text-gray-300">
-                    HenÃ¼z hakkÄ±nda bilgisi yok.
+                    Henüz hakkında bilgisi yok.
                   </p>
                 </div>
 
@@ -1012,7 +1012,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   title={confirmModal.title}
   description={confirmModal.description}
   confirmText={confirmModal.confirmText}
-  cancelText="VazgeÃ§"
+  cancelText="Vazgeç"
   danger={confirmModal.danger}
   onConfirm={confirmModal.onConfirm}
   onCancel={() => setConfirmModal((prev) => ({ ...prev, open: false }))}
