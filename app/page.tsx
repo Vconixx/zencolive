@@ -326,27 +326,37 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
     try {
       const AudioContextClass =
-        window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        window.AudioContext ||
+        (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
 
       if (!AudioContextClass) return;
 
       const audioContext = new AudioContextClass();
-      const oscillator = audioContext.createOscillator();
-      const gain = audioContext.createGain();
 
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(660, audioContext.currentTime);
-      oscillator.frequency.exponentialRampToValueAtTime(880, audioContext.currentTime + 0.08);
+      function playTone(frequency: number, start: number, duration: number, volume: number) {
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
 
-      gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.12, audioContext.currentTime + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.22);
+        oscillator.type = "triangle";
+        oscillator.frequency.setValueAtTime(frequency, start);
 
-      oscillator.connect(gain);
-      gain.connect(audioContext.destination);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(volume, start + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
 
-      oscillator.start();
-      oscillator.stop(audioContext.currentTime + 0.24);
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+
+        oscillator.start(start);
+        oscillator.stop(start + duration + 0.02);
+      }
+
+      const now = audioContext.currentTime;
+
+      // Kısa, yumuşak Discord tarzı "tuk" sesi
+      playTone(520, now, 0.11, 0.045);
+      playTone(780, now + 0.045, 0.13, 0.035);
     } catch {
       // Tarayıcı otomatik sesi engellerse sessiz geç.
     }
@@ -898,7 +908,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       supabase.removeChannel(channel);
       clearInterval(profileInterval);
     };
-  }, [activeServerId, activeChannelId]);
+  }, [activeServerId, activeChannelId, currentUserId, soundEnabled]);
 
   useEffect(() => {
     const hasXPost = messages.some((msg) => getFirstXPostLink(msg.content));
@@ -968,6 +978,18 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
         .zenco-scroll {
           scrollbar-width: thin;
           scrollbar-color: #7c3aed #2b2d31;
+        }
+
+        .zenco-x-embed iframe {
+          max-width: 330px !important;
+          width: 330px !important;
+        }
+
+        .zenco-x-embed .twitter-tweet,
+        .zenco-x-embed twitter-widget {
+          max-width: 330px !important;
+          width: 330px !important;
+          margin: 0 !important;
         }
       `}</style>
 
@@ -1234,12 +1256,12 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
                         {getFirstYouTubeLink(msg.content) &&
                           getYouTubeVideoId(getFirstYouTubeLink(msg.content) || "") && (
-                            <div className="mt-3 w-fit max-w-[430px] rounded-2xl border border-[#404249] bg-[#111214] overflow-hidden shadow-lg shadow-black/20">
+                            <div className="mt-3 w-fit max-w-[370px] rounded-2xl border border-[#404249] bg-[#111214] overflow-hidden shadow-lg shadow-black/20">
                               <div className="h-1 bg-gradient-to-r from-red-600 to-red-400" />
 
                               <div className="p-3">
                                 <p className="text-xs text-red-300 font-bold uppercase tracking-wide mb-2">
-                                  YouTube Önizlemesi
+                                  
                                 </p>
 
                                 <iframe
@@ -1256,9 +1278,9 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                           )}
 
                         {getFirstXPostLink(msg.content) && (
-                          <div className="mt-3 w-fit max-w-[430px] rounded-2xl border border-[#404249] bg-[#111214] p-2 overflow-hidden shadow-lg shadow-black/20">
+                          <div className="zenco-x-embed mt-3 w-fit max-w-[360px] max-h-[430px] rounded-2xl border border-[#404249] bg-[#111214] p-2 overflow-hidden shadow-lg shadow-black/20">
                             <p className="text-xs text-indigo-300 font-bold uppercase tracking-wide mb-2">
-                              X / Twitter Önizlemesi
+                              
                             </p>
 
                             <blockquote
@@ -1281,7 +1303,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                             href={extractFirstLink(msg.content) || "#"}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="mt-3 block max-w-xl rounded-2xl border border-[#404249] bg-[#232428] overflow-hidden hover:border-indigo-500/70 hover:bg-[#292b31] transition-all duration-200 hover:translate-x-1 shadow-lg shadow-black/10"
+                            className="mt-3 block max-w-[420px] rounded-2xl border border-[#404249] bg-[#232428] overflow-hidden hover:border-indigo-500/70 hover:bg-[#292b31] transition-all duration-200 hover:translate-x-1 shadow-lg shadow-black/10"
                           >
                             <div className="h-1 bg-gradient-to-r from-indigo-500 to-purple-600" />
 
@@ -1293,7 +1315,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
                                 <div className="min-w-0 flex-1">
                                   <p className="text-xs text-indigo-300 font-bold uppercase tracking-wide">
-                                    Bağlantı Önizlemesi
+                                    
                                   </p>
 
                                   <p className="text-white font-bold mt-1 truncate">
