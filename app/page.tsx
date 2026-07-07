@@ -201,6 +201,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   const [createChannelLoading, setCreateChannelLoading] = useState(false);
   const [createChannelType, setCreateChannelType] =
     useState<ChannelType>("text");
+  const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1066,7 +1067,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="p-5 flex gap-3 bg-[#313338]/95 backdrop-blur border-t border-[#1e1f22]">
+          <div className="p-5 bg-[#313338]/95 backdrop-blur border-t border-[#1e1f22]">
             <input
               ref={fileInputRef}
               type="file"
@@ -1075,33 +1076,83 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) uploadMessageFile(file);
+                setAttachmentMenuOpen(false);
               }}
             />
 
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              title="Resim yükle"
-              className="bg-[#383a40] hover:bg-[#4b4d55] px-4 rounded-xl font-bold transition-all duration-200 hover:scale-[1.03] border border-transparent hover:border-indigo-500"
-            >
-              📎
-            </button>
+            <div className="relative flex items-center gap-3 rounded-2xl bg-[#383a40] border border-[#45474f] px-3 py-3 shadow-lg shadow-black/10 focus-within:border-indigo-500 transition-all duration-200">
+              {attachmentMenuOpen && (
+                <div className="absolute bottom-[64px] left-0 w-64 rounded-2xl bg-[#1f2026] border border-white/10 shadow-2xl overflow-hidden animate-[fadeIn_0.15s_ease-out] z-50">
+                  <div className="p-2 space-y-1">
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-indigo-600 transition-all"
+                    >
+                      <span className="w-10 h-10 rounded-xl bg-indigo-600/20 flex items-center justify-center text-xl">
+                        📷
+                      </span>
 
-            <input
-              className="flex-1 bg-[#383a40] rounded-xl px-4 py-3 text-white outline-none border border-transparent focus:border-indigo-500 transition-all duration-200"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") sendMessage();
-              }}
-              placeholder={`#${activeChannelName} kanalına mesaj gönder...`}
-            />
+                      <div>
+                        <p className="font-bold text-sm text-white">Resim Yükle</p>
+                        <p className="text-xs text-gray-400">PNG, JPG, GIF, WEBP</p>
+                      </div>
+                    </button>
 
-            <button
-              onClick={sendMessage}
-              className="bg-indigo-600 hover:bg-indigo-700 px-5 rounded-xl font-bold transition-all duration-200 hover:scale-[1.03] shadow-lg shadow-indigo-900/30"
-            >
-              Gönder
-            </button>
+                    <button
+                      onClick={() => showToast("Dosya gönderme yakında eklenecek.", "info")}
+                      className="w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-[#2b2d31] transition-all opacity-70"
+                    >
+                      <span className="w-10 h-10 rounded-xl bg-purple-600/20 flex items-center justify-center text-xl">
+                        📁
+                      </span>
+
+                      <div>
+                        <p className="font-bold text-sm text-white">Dosya Gönder</p>
+                        <p className="text-xs text-gray-400">Yakında</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => setAttachmentMenuOpen((prev) => !prev)}
+                title="Ekle"
+                className={`w-11 h-11 rounded-full flex items-center justify-center text-2xl font-black transition-all duration-200 active:scale-95 ${
+                  attachmentMenuOpen
+                    ? "bg-indigo-600 rotate-45 shadow-lg shadow-indigo-900/40"
+                    : "bg-[#2b2d31] hover:bg-indigo-600 hover:rotate-90"
+                }`}
+              >
+                +
+              </button>
+
+              <input
+                className="flex-1 bg-transparent px-1 py-2 text-white outline-none placeholder:text-gray-400"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") sendMessage();
+                  if (e.key === "Escape") setAttachmentMenuOpen(false);
+                }}
+                placeholder={`#${activeChannelName} kanalına mesaj gönder...`}
+              />
+
+              <button
+                onClick={() => showToast("Emoji sistemi yakında eklenecek.", "info")}
+                title="Emoji"
+                className="w-10 h-10 rounded-xl hover:bg-[#4b4d55] flex items-center justify-center text-xl transition-all duration-200 hover:scale-110 active:scale-95"
+              >
+                😊
+              </button>
+
+              <button
+                onClick={sendMessage}
+                className="bg-indigo-600 hover:bg-indigo-700 px-5 h-11 rounded-xl font-bold transition-all duration-200 hover:scale-[1.03] active:scale-95 shadow-lg shadow-indigo-900/30"
+              >
+                Gönder
+              </button>
+            </div>
           </div>
         </section>
 
