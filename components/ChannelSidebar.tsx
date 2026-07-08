@@ -27,6 +27,7 @@ type Props = {
   avatarUrl: string | null;
   currentRole: string;
   currentStatus?: string;
+  currentManualStatus?: string;
   currentAbout?: string;
   currentProfileColor?: string;
   canManageChannels: boolean;
@@ -52,6 +53,15 @@ const statusOptions = [
 ];
 
 function getStatusInfo(status?: string) {
+  if (status === "offline") {
+    return {
+      value: "offline",
+      label: "Çevrimdışı",
+      icon: "⚫",
+      color: "text-gray-300",
+    };
+  }
+
   return statusOptions.find((item) => item.value === status) || statusOptions[0];
 }
 
@@ -95,6 +105,7 @@ export default function ChannelSidebar({
   avatarUrl,
   currentRole,
   currentStatus = "online",
+  currentManualStatus = "online",
   currentProfileColor = "#6366f1",
   canManageChannels,
   onCreateTextChannel,
@@ -112,14 +123,15 @@ export default function ChannelSidebar({
 }: Props) {
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [serverMenuOpen, setServerMenuOpen] = useState(false);
-  const [localStatus, setLocalStatus] = useState(currentStatus);
+  const [localStatus, setLocalStatus] = useState(currentManualStatus || currentStatus);
   const serverMenuRef = useRef<HTMLDivElement>(null);
 
-  const statusInfo = getStatusInfo(localStatus || currentStatus);
+  const statusInfo = getStatusInfo(currentStatus);
+  const selectedManualStatus = localStatus || currentManualStatus || "online";
 
   useEffect(() => {
-    setLocalStatus(currentStatus || "online");
-  }, [currentStatus]);
+    setLocalStatus(currentManualStatus || currentStatus || "online");
+  }, [currentManualStatus, currentStatus]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -145,7 +157,11 @@ export default function ChannelSidebar({
 
     await supabase
       .from("profiles")
-      .update({ status })
+      .update({
+        status,
+        manual_status: status,
+        last_seen: new Date().toISOString(),
+      })
       .eq("id", data.user.id);
   }
 
@@ -221,6 +237,23 @@ export default function ChannelSidebar({
             </div>
           </div>
         )}
+      </div>
+
+
+      <div className="mt-4 rounded-2xl border border-white/10 bg-[#232428] p-3 shadow-lg">
+        <button
+          className="flex w-full items-center justify-between rounded-xl px-2 py-2 text-left hover:bg-[#34363d] transition"
+          title="Arkadaşlar yakında"
+        >
+          <span className="text-sm font-black">👥 Arkadaşlar</span>
+          <span className="rounded-full bg-indigo-600/20 px-2 py-0.5 text-[11px] font-black text-indigo-200">
+            Yakında
+          </span>
+        </button>
+
+        <p className="mt-1 px-2 text-xs text-gray-500">
+          Arkadaş ekleme ve DM sistemi için hazır alan.
+        </p>
       </div>
 
       <div className="mt-5 border-t border-[#1e1f22] pt-4">
@@ -309,7 +342,7 @@ export default function ChannelSidebar({
                   key={item.value}
                   onClick={() => updateStatus(item.value)}
                   className={`w-full rounded-xl px-3 py-2 text-left transition hover:bg-[#34363d] ${
-                    (localStatus || currentStatus) === item.value
+                    selectedManualStatus === item.value
                       ? "bg-indigo-600/20"
                       : ""
                   }`}

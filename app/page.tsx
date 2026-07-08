@@ -39,6 +39,8 @@ type Profile = {
   status: string | null;
   profile_color: string | null;
   created_at: string | null;
+  last_seen: string | null;
+  manual_status: string | null;
 };
 
 type Server = {
@@ -253,6 +255,45 @@ function getStatusInfo(status?: string | null) {
   };
 }
 
+function isProfileOnline(profile?: Profile | null) {
+  if (!profile) return false;
+
+  if (profile.manual_status === "invisible" || profile.status === "invisible") {
+    return false;
+  }
+
+  if (!profile.last_seen) return false;
+
+  const lastSeenTime = new Date(profile.last_seen).getTime();
+
+  if (Number.isNaN(lastSeenTime)) return false;
+
+  return Date.now() - lastSeenTime < 75 * 1000;
+}
+
+function getDisplayStatus(profile?: Profile | null) {
+  if (!profile) return "offline";
+
+  if (!isProfileOnline(profile)) return "offline";
+
+  return profile.manual_status || profile.status || "online";
+}
+
+function getProfileStatusInfo(profile?: Profile | null) {
+  const status = getDisplayStatus(profile);
+
+  if (status === "offline") {
+    return {
+      label: "Çevrimdışı",
+      icon: "⚫",
+      dotClass: "bg-gray-500",
+      textClass: "text-gray-300",
+    };
+  }
+
+  return getStatusInfo(status);
+}
+
 function getSafeProfileColor(color?: string | null) {
   return color || "#6366f1";
 }
@@ -286,6 +327,8 @@ export default function Home() {
   const [currentAbout, setCurrentAbout] = useState("");
   const [currentStatus, setCurrentStatus] = useState("online");
   const [currentProfileColor, setCurrentProfileColor] = useState("#6366f1");
+  const [currentLastSeen, setCurrentLastSeen] = useState<string | null>(null);
+  const [currentManualStatus, setCurrentManualStatus] = useState("online");
   const [content, setContent] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState("");
@@ -379,6 +422,14 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
   const canManageChannels =
     !!activeServer && activeServer.owner_id === currentUserId;
+
+  const currentProfileForStatus =
+    profiles.find((profile) => profile.id === currentUserId) || null;
+
+  const currentDisplayStatus =
+    currentProfileForStatus
+      ? getDisplayStatus(currentProfileForStatus)
+      : currentManualStatus || currentStatus;
 
   const soundEnabled =
     activeServerId ? serverNotificationSettings[activeServerId] !== false : true;
@@ -680,7 +731,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("id, username, avatar_url, banner_url, role, about, status, profile_color, created_at")
+      .select("id, username, avatar_url, banner_url, role, about, status, profile_color, created_at, last_seen, manual_status")
       .eq("id", data.user.id)
       .single();
 
@@ -696,6 +747,17 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     setCurrentAbout(profile?.about || "");
     setCurrentStatus(profile?.status || "online");
     setCurrentProfileColor(profile?.profile_color || "#6366f1");
+    setCurrentLastSeen(profile?.last_seen || null);
+    setCurrentManualStatus(profile?.manual_status || profile?.status || "online");
+
+    await supabase
+      .from("profiles")
+      .update({
+        last_seen: new Date().toISOString(),
+        manual_status: profile?.manual_status || profile?.status || "online",
+      })
+      .eq("id", data.user.id);
+
     setLoading(false);
   }
 
@@ -940,7 +1002,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   async function getProfiles() {
     const { data } = await supabase
       .from("profiles")
-      .select("id, username, avatar_url, banner_url, role, about, status, profile_color, created_at");
+      .select("id, username, avatar_url, banner_url, role, about, status, profile_color, created_at, last_seen, manual_status");
 
     if (data) {
       setProfiles(data);
@@ -954,6 +1016,8 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
         setCurrentAbout(myProfile.about || "");
         setCurrentStatus(myProfile.status || "online");
         setCurrentProfileColor(myProfile.profile_color || "#6366f1");
+        setCurrentLastSeen(myProfile.last_seen || null);
+        setCurrentManualStatus(myProfile.manual_status || myProfile.status || "online");
       }
 
       setSelectedProfile((prev) => {
@@ -1218,6 +1282,43 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     }
   }, []);
 
+
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    let cancelled = false;
+
+    async function touchLastSeen() {
+      if (cancelled) return;
+
+      const now = new Date().toISOString();
+      setCurrentLastSeen(now);
+
+      await supabase
+        .from("profiles")
+        .update({ last_seen: now })
+        .eq("id", currentUserId);
+    }
+
+    touchLastSeen();
+
+    const interval = setInterval(touchLastSeen, 25000);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        touchLastSeen();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [currentUserId]);
+
   useEffect(() => {
     if (currentUserId) getServers();
   }, [currentUserId]);
@@ -1452,7 +1553,8 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   username={username}
   avatarUrl={avatarUrl}
   currentRole={currentRole}
-  currentStatus={currentStatus}
+  currentStatus={currentDisplayStatus}
+  currentManualStatus={currentManualStatus}
   currentAbout={currentAbout}
   currentProfileColor={currentProfileColor}
   canManageChannels={canManageChannels}
@@ -2147,7 +2249,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
                     <span
                       className={`absolute bottom-2 right-2 h-5 w-5 rounded-full border-4 border-[#2b2d31] ${
-                        getStatusInfo(selectedProfile.status).dotClass
+                        getProfileStatusInfo(selectedProfile).dotClass
                       }`}
                     />
                   </div>
@@ -2165,11 +2267,11 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
                 <p
                   className={`mt-1 text-sm font-bold ${
-                    getStatusInfo(selectedProfile.status).textClass
+                    getProfileStatusInfo(selectedProfile).textClass
                   }`}
                 >
-                  {getStatusInfo(selectedProfile.status).icon}{" "}
-                  {getStatusInfo(selectedProfile.status).label}
+                  {getProfileStatusInfo(selectedProfile).icon}{" "}
+                  {getProfileStatusInfo(selectedProfile).label}
                 </p>
 
                 <div className="mt-5 space-y-3">
