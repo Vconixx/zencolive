@@ -65,6 +65,14 @@ type MessageReaction = {
   emoji: string;
 };
 
+type FriendRow = {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  status: string;
+  created_at: string;
+};
+
 function generateInviteCode() {
   return Math.random().toString(36).slice(2, 10).toUpperCase();
 }
@@ -268,7 +276,7 @@ function isProfileOnline(profile?: Profile | null) {
 
   if (Number.isNaN(lastSeenTime)) return false;
 
-  return Date.now() - lastSeenTime < 75 * 1000;
+  return Date.now() - lastSeenTime < 25 * 1000;
 }
 
 function getDisplayStatus(profile?: Profile | null) {
@@ -337,6 +345,11 @@ export default function Home() {
   const [pinnedPanelOpen, setPinnedPanelOpen] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
+  const [friends, setFriends] = useState<FriendRow[]>([]);
+  const [friendsPanelOpen, setFriendsPanelOpen] = useState(false);
+  const [friendSearch, setFriendSearch] = useState("");
+  const [friendSearchResults, setFriendSearchResults] = useState<Profile[]>([]);
+  const [friendSearchLoading, setFriendSearchLoading] = useState(false);
   const [toast, setToast] = useState("");
 const [toastType, setToastType] = useState<"success" | "error" | "info">("success");
 const [confirmModal, setConfirmModal] = useState({
@@ -418,6 +431,41 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       const bTime = b.pinned_at ? new Date(b.pinned_at).getTime() : 0;
 
       return bTime - aTime;
+    });
+
+  const acceptedFriends = friends.filter((friend) => friend.status === "accepted");
+
+  const incomingFriendRequests = friends.filter(
+    (friend) => friend.status === "pending" && friend.receiver_id === currentUserId
+  );
+
+  const outgoingFriendRequests = friends.filter(
+    (friend) => friend.status === "pending" && friend.sender_id === currentUserId
+  );
+
+  function getFriendProfile(friend: FriendRow) {
+    const friendId =
+      friend.sender_id === currentUserId ? friend.receiver_id : friend.sender_id;
+
+    return profiles.find((profile) => profile.id === friendId) || null;
+  }
+
+  const friendProfiles = acceptedFriends
+    .map((friend) => ({
+      friend,
+      profile: getFriendProfile(friend),
+    }))
+    .filter((item) => item.profile)
+    .sort((a, b) => {
+      const aOnline = isProfileOnline(a.profile) ? 1 : 0;
+      const bOnline = isProfileOnline(b.profile) ? 1 : 0;
+
+      if (aOnline !== bOnline) return bOnline - aOnline;
+
+      return (a.profile?.username || "").localeCompare(
+        b.profile?.username || "",
+        "tr"
+      );
     });
 
   const canManageChannels =
@@ -994,6 +1042,149 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     });
   }
 
+  function getFriendRelation(profileId: string) {
+    return friends.find(
+      (friend) =>
+        (friend.sender_id === currentUserId && friend.receiver_id === profileId) ||
+        (friend.receiver_id === currentUserId && friend.sender_id === profileId)
+    );
+  }
+
+  function getFriendButtonState(profileId: string) {
+    const relation = getFriendRelation(profileId);
+
+    if (!relation) return "none";
+    if (relation.status === "accepted") return "accepted";
+
+    if (relation.status === "pending" && relation.sender_id === currentUserId) {
+      return "outgoing";
+    }
+
+    if (relation.status === "pending" && relation.receiver_id === currentUserId) {
+      return "incoming";
+    }
+
+    return "none";
+  }
+
+  async function getFriends() {
+    if (!currentUserId) return;
+
+    const { data, error } = await supabase
+      .from("friends")
+      .select("id, sender_id, receiver_id, status, created_at")
+      .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      showToast("Arkadaşlar alınamadı: " + error.message, "error");
+      return;
+    }
+
+    setFriends(data || []);
+  }
+
+  async function searchUsersForFriend() {
+    const query = friendSearch.trim();
+
+    if (query.length < 2) {
+      showToast("En az 2 karakter yaz.", "error");
+      return;
+    }
+
+    setFriendSearchLoading(true);
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select(
+        "id, username, avatar_url, banner_url, role, about, status, profile_color, created_at, last_seen, manual_status"
+      )
+      .ilike("username", `%${query}%`)
+      .neq("id", currentUserId)
+      .limit(8);
+
+    setFriendSearchLoading(false);
+
+    if (error) {
+      showToast("Kullanıcı aranamadı: " + error.message, "error");
+      return;
+    }
+
+    setFriendSearchResults(data || []);
+  }
+
+  async function sendFriendRequest(profileId: string) {
+    if (!currentUserId || profileId === currentUserId) return;
+
+    const existing = getFriendRelation(profileId);
+
+    if (existing) {
+      showToast("Bu kullanıcıyla zaten arkadaşlık durumun var.", "info");
+      return;
+    }
+
+    const { error } = await supabase.from("friends").insert({
+      sender_id: currentUserId,
+      receiver_id: profileId,
+      status: "pending",
+    });
+
+    if (error) {
+      showToast("Arkadaşlık isteği gönderilemedi: " + error.message, "error");
+      return;
+    }
+
+    showToast("Arkadaşlık isteği gönderildi.", "success");
+    await getFriends();
+  }
+
+  async function acceptFriendRequest(friendId: string) {
+    const { error } = await supabase
+      .from("friends")
+      .update({ status: "accepted" })
+      .eq("id", friendId);
+
+    if (error) {
+      showToast("İstek kabul edilemedi: " + error.message, "error");
+      return;
+    }
+
+    showToast("Arkadaşlık isteği kabul edildi.", "success");
+    await getFriends();
+  }
+
+  async function rejectFriendRequest(friendId: string) {
+    const { error } = await supabase.from("friends").delete().eq("id", friendId);
+
+    if (error) {
+      showToast("İstek silinemedi: " + error.message, "error");
+      return;
+    }
+
+    showToast("İstek kaldırıldı.", "success");
+    await getFriends();
+  }
+
+  async function removeFriend(friendId: string) {
+    openConfirm({
+      title: "Arkadaşlıktan çıkarılsın mı?",
+      description: "Bu kişi arkadaş listenden kaldırılacak.",
+      confirmText: "Kaldır",
+      danger: true,
+      onConfirm: async () => {
+        const { error } = await supabase.from("friends").delete().eq("id", friendId);
+
+        if (error) {
+          showToast("Arkadaş kaldırılamadı: " + error.message, "error");
+          return;
+        }
+
+        showToast("Arkadaş kaldırıldı.", "success");
+        await getFriends();
+      },
+    });
+  }
+
   async function logout() {
     await supabase.auth.signOut();
     router.push("/login");
@@ -1302,7 +1493,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
     touchLastSeen();
 
-    const interval = setInterval(touchLastSeen, 25000);
+    const interval = setInterval(touchLastSeen, 10000);
 
     const handleVisibilityChange = () => {
       if (!document.hidden) {
@@ -1321,6 +1512,10 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
   useEffect(() => {
     if (currentUserId) getServers();
+  }, [currentUserId]);
+
+  useEffect(() => {
+    if (currentUserId) getFriends();
   }, [currentUserId]);
 
   useEffect(() => {
@@ -1442,6 +1637,25 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       clearInterval(profileInterval);
     };
   }, [activeServerId, activeChannelId, currentUserId, soundEnabled]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const friendsChannel = supabase
+      .channel(`friends-channel-${currentUserId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "friends" },
+        () => {
+          getFriends();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(friendsChannel);
+    };
+  }, [currentUserId]);
 
   useEffect(() => {
     const hasXPost = messages.some((msg) => getFirstXPostLink(msg.content));
@@ -1656,6 +1870,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     setReplyToMessage(null);
     setOpenReactionMessageId(null);
     setPinnedPanelOpen(false);
+    setFriendsPanelOpen(false);
     setUnreadCount(0);
     isNearBottomRef.current = true;
   }}
@@ -1667,6 +1882,30 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
             <h2 className="font-bold"># {activeChannelName}</h2>
 
             <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={() => setFriendsPanelOpen((prev) => !prev)}
+                className={`group flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-xs font-black transition-all duration-200 hover:scale-[1.03] active:scale-95 ${
+                  friendsPanelOpen
+                    ? "border-indigo-300/60 bg-gradient-to-r from-indigo-500/30 to-purple-500/15 text-indigo-50 shadow-lg shadow-indigo-900/20"
+                    : incomingFriendRequests.length > 0
+                    ? "border-green-400/35 bg-gradient-to-r from-green-500/20 to-emerald-500/10 text-green-100 shadow-md shadow-green-900/10 hover:border-green-300/60"
+                    : "border-white/10 bg-[#404249] text-gray-300 hover:bg-[#50535a]"
+                }`}
+                title="Arkadaşlar"
+              >
+                <span className="flex h-6 w-6 items-center justify-center rounded-xl bg-indigo-500/20">
+                  👥
+                </span>
+
+                <span>Arkadaşlar</span>
+
+                {incomingFriendRequests.length > 0 && (
+                  <span className="rounded-full bg-green-500 px-2 py-0.5 text-[11px] text-white">
+                    {incomingFriendRequests.length}
+                  </span>
+                )}
+              </button>
+
               <button
                 onClick={() => setPinnedPanelOpen((prev) => !prev)}
                 className={`group flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-xs font-black transition-all duration-200 hover:scale-[1.03] active:scale-95 ${
@@ -1704,6 +1943,239 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
               </button>
             </div>
           </header>
+
+          {friendsPanelOpen && (
+            <div className="absolute left-4 right-4 top-16 z-50 rounded-3xl border border-indigo-400/20 bg-[#1f2026]/95 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl animate-[fadeIn_0.15s_ease-out]">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-500/15 text-xl shadow-lg shadow-indigo-900/10">
+                    👥
+                  </span>
+
+                  <div>
+                    <p className="text-base font-black text-indigo-100">
+                      Arkadaşlar
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      İstekler, arkadaş listesi ve kullanıcı arama
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setFriendsPanelOpen(false)}
+                  className="h-9 w-9 rounded-full bg-[#383a40] hover:bg-red-600 font-black transition hover:scale-105"
+                  title="Kapat"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-white/10 bg-[#232428] p-3">
+                    <p className="mb-3 text-xs font-black text-gray-400">
+                      ARKADAŞ EKLE
+                    </p>
+
+                    <div className="flex gap-2">
+                      <input
+                        value={friendSearch}
+                        onChange={(e) => setFriendSearch(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") searchUsersForFriend();
+                        }}
+                        className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#383a40] px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                        placeholder="Kullanıcı adı ara..."
+                      />
+
+                      <button
+                        onClick={searchUsersForFriend}
+                        disabled={friendSearchLoading}
+                        className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-black hover:bg-indigo-700 disabled:opacity-60"
+                      >
+                        {friendSearchLoading ? "..." : "Ara"}
+                      </button>
+                    </div>
+
+                    {friendSearchResults.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {friendSearchResults.map((profile) => {
+                          const relationState = getFriendButtonState(profile.id);
+
+                          return (
+                            <div
+                              key={profile.id}
+                              className="flex items-center gap-3 rounded-2xl bg-[#1f2026] p-3"
+                            >
+                              <Avatar
+                                username={profile.username}
+                                avatarUrl={profile.avatar_url}
+                                size="sm"
+                              />
+
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-black">
+                                  {profile.username}
+                                </p>
+                                <p
+                                  className={`text-xs font-bold ${
+                                    getProfileStatusInfo(profile).textClass
+                                  }`}
+                                >
+                                  {getProfileStatusInfo(profile).icon}{" "}
+                                  {getProfileStatusInfo(profile).label}
+                                </p>
+                              </div>
+
+                              {relationState === "none" && (
+                                <button
+                                  onClick={() => sendFriendRequest(profile.id)}
+                                  className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black hover:bg-indigo-700"
+                                >
+                                  Ekle
+                                </button>
+                              )}
+
+                              {relationState === "outgoing" && (
+                                <span className="rounded-xl bg-yellow-500/15 px-3 py-2 text-xs font-black text-yellow-200">
+                                  Bekliyor
+                                </span>
+                              )}
+
+                              {relationState === "incoming" && (
+                                <span className="rounded-xl bg-green-500/15 px-3 py-2 text-xs font-black text-green-200">
+                                  İstek var
+                                </span>
+                              )}
+
+                              {relationState === "accepted" && (
+                                <span className="rounded-xl bg-green-500/15 px-3 py-2 text-xs font-black text-green-200">
+                                  Arkadaş
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-[#232428] p-3">
+                    <p className="mb-3 text-xs font-black text-gray-400">
+                      GELEN İSTEKLER
+                    </p>
+
+                    {incomingFriendRequests.length === 0 ? (
+                      <p className="rounded-xl bg-[#1f2026] p-3 text-sm text-gray-400">
+                        Gelen arkadaşlık isteği yok.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {incomingFriendRequests.map((request) => {
+                          const profile = profiles.find(
+                            (item) => item.id === request.sender_id
+                          );
+
+                          if (!profile) return null;
+
+                          return (
+                            <div
+                              key={request.id}
+                              className="flex items-center gap-3 rounded-2xl bg-[#1f2026] p-3"
+                            >
+                              <Avatar
+                                username={profile.username}
+                                avatarUrl={profile.avatar_url}
+                                size="sm"
+                              />
+
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-black">
+                                  {profile.username}
+                                </p>
+                                <p className="text-xs text-gray-400">
+                                  Arkadaşlık isteği gönderdi
+                                </p>
+                              </div>
+
+                              <button
+                                onClick={() => acceptFriendRequest(request.id)}
+                                className="rounded-xl bg-green-600 px-3 py-2 text-xs font-black hover:bg-green-700"
+                              >
+                                Kabul
+                              </button>
+
+                              <button
+                                onClick={() => rejectFriendRequest(request.id)}
+                                className="rounded-xl bg-red-600 px-3 py-2 text-xs font-black hover:bg-red-700"
+                              >
+                                Reddet
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-[#232428] p-3">
+                  <p className="mb-3 text-xs font-black text-gray-400">
+                    ARKADAŞ LİSTESİ
+                  </p>
+
+                  {friendProfiles.length === 0 ? (
+                    <p className="rounded-xl bg-[#1f2026] p-3 text-sm text-gray-400">
+                      Henüz arkadaşın yok.
+                    </p>
+                  ) : (
+                    <div className="zenco-scroll max-h-[420px] space-y-2 overflow-y-auto pr-1">
+                      {friendProfiles.map(({ friend, profile }) => {
+                        if (!profile) return null;
+
+                        const statusInfo = getProfileStatusInfo(profile);
+
+                        return (
+                          <div
+                            key={friend.id}
+                            className="flex items-center gap-3 rounded-2xl bg-[#1f2026] p-3 hover:bg-[#2b2d31] transition"
+                          >
+                            <button onClick={() => setSelectedProfile(profile)}>
+                              <Avatar
+                                username={profile.username}
+                                avatarUrl={profile.avatar_url}
+                                size="sm"
+                              />
+                            </button>
+
+                            <button
+                              onClick={() => setSelectedProfile(profile)}
+                              className="min-w-0 flex-1 text-left"
+                            >
+                              <p className="truncate text-sm font-black">
+                                {profile.username}
+                              </p>
+                              <p className={`text-xs font-bold ${statusInfo.textClass}`}>
+                                {statusInfo.icon} {statusInfo.label}
+                              </p>
+                            </button>
+
+                            <button
+                              onClick={() => removeFriend(friend.id)}
+                              className="rounded-xl bg-[#383a40] px-3 py-2 text-xs font-black hover:bg-red-600 transition"
+                            >
+                              Kaldır
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {pinnedPanelOpen && (
             <div className="absolute left-4 right-4 top-16 z-50 rounded-3xl border border-yellow-400/20 bg-[#1f2026]/95 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl animate-[fadeIn_0.15s_ease-out]">
@@ -2273,6 +2745,66 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                   {getProfileStatusInfo(selectedProfile).icon}{" "}
                   {getProfileStatusInfo(selectedProfile).label}
                 </p>
+
+                {selectedProfile.id !== currentUserId && (
+                  <div className="mt-4">
+                    {getFriendButtonState(selectedProfile.id) === "none" && (
+                      <button
+                        onClick={() => sendFriendRequest(selectedProfile.id)}
+                        className="w-full rounded-2xl bg-indigo-600 py-3 font-black hover:bg-indigo-700 transition"
+                      >
+                        + Arkadaş Ekle
+                      </button>
+                    )}
+
+                    {getFriendButtonState(selectedProfile.id) === "outgoing" && (
+                      <button
+                        disabled
+                        className="w-full rounded-2xl bg-yellow-500/15 py-3 font-black text-yellow-200"
+                      >
+                        ⏳ İstek Gönderildi
+                      </button>
+                    )}
+
+                    {getFriendButtonState(selectedProfile.id) === "incoming" && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => {
+                            const relation = getFriendRelation(selectedProfile.id);
+                            if (relation) acceptFriendRequest(relation.id);
+                          }}
+                          className="rounded-2xl bg-green-600 py-3 font-black hover:bg-green-700 transition"
+                        >
+                          Kabul Et
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            const relation = getFriendRelation(selectedProfile.id);
+                            if (relation) rejectFriendRequest(relation.id);
+                          }}
+                          className="rounded-2xl bg-red-600 py-3 font-black hover:bg-red-700 transition"
+                        >
+                          Reddet
+                        </button>
+                      </div>
+                    )}
+
+                    {getFriendButtonState(selectedProfile.id) === "accepted" && (
+                      <button
+                        onClick={() => {
+                          const relation = getFriendRelation(selectedProfile.id);
+                          if (relation) removeFriend(relation.id);
+                        }}
+                        className="w-full rounded-2xl bg-green-500/15 py-3 font-black text-green-200 hover:bg-red-600 hover:text-white transition"
+                      >
+                        ✅ Arkadaşsınız
+                      </button>
+                    )}
+                  </div>
+                )}
+
+
 
                 <div className="mt-5 space-y-3">
                   <div className="rounded-2xl bg-[#232428] p-4">
