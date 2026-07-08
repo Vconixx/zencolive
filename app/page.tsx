@@ -25,6 +25,8 @@ type Message = {
   server_id: string | null;
   channel_uuid: string | null;
   reply_to_id: number | null;
+  pinned: boolean | null;
+  pinned_at: string | null;
 };
 
 type Profile = {
@@ -232,6 +234,7 @@ export default function Home() {
   const [editingContent, setEditingContent] = useState("");
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
   const [openReactionMessageId, setOpenReactionMessageId] = useState<number | null>(null);
+  const [pinnedPanelOpen, setPinnedPanelOpen] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [toast, setToast] = useState("");
@@ -307,6 +310,15 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     textChannels[0];
 
   const activeChannelName = activeChannel?.name || "genel-sohbet";
+
+  const pinnedMessages = messages
+    .filter((message) => message.pinned)
+    .sort((a, b) => {
+      const aTime = a.pinned_at ? new Date(a.pinned_at).getTime() : 0;
+      const bTime = b.pinned_at ? new Date(b.pinned_at).getTime() : 0;
+
+      return bTime - aTime;
+    });
 
   const canManageChannels =
     !!activeServer && activeServer.owner_id === currentUserId;
@@ -882,7 +894,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     const { data, error } = await supabase
       .from("messages")
       .select(
-        "id, username, content, created_at, edited_at, user_id, channel_id, server_id, channel_uuid, reply_to_id"
+        "id, username, content, created_at, edited_at, user_id, channel_id, server_id, channel_uuid, reply_to_id, pinned, pinned_at"
       )
       .eq("server_id", activeServerId)
       .eq("channel_uuid", activeChannelId)
@@ -1031,6 +1043,49 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     });
   }
 
+  async function togglePinMessage(msg: Message) {
+    const canPin = msg.user_id === currentUserId || currentRole === "admin";
+
+    if (!canPin) {
+      showToast("Bu mesajı sabitleme yetkin yok.", "error");
+      return;
+    }
+
+    const nextPinned = !msg.pinned;
+
+    const { error } = await supabase
+      .from("messages")
+      .update({
+        pinned: nextPinned,
+        pinned_at: nextPinned ? new Date().toISOString() : null,
+      })
+      .eq("id", msg.id);
+
+    if (error) {
+      showToast("Mesaj sabitlenemedi: " + error.message, "error");
+      return;
+    }
+
+    setMessages((prev) =>
+      prev.map((message) =>
+        message.id === msg.id
+          ? {
+              ...message,
+              pinned: nextPinned,
+              pinned_at: nextPinned ? new Date().toISOString() : null,
+            }
+          : message
+      )
+    );
+
+    showToast(
+      nextPinned ? "Mesaj sabitlendi." : "Mesaj sabitten kaldırıldı.",
+      "success"
+    );
+  }
+
+
+
   async function saveEdit(msg: Message) {
     if (msg.user_id !== currentUserId) {
       showToast("Sadece kendi mesajını düzenleyebilirsin.", "error");
@@ -1095,6 +1150,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       setContent("");
       setReplyToMessage(null);
       setOpenReactionMessageId(null);
+      setPinnedPanelOpen(false);
       setMessages([]);
       setMessageReactions([]);
     }
@@ -1415,6 +1471,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     setContent("");
     setReplyToMessage(null);
     setOpenReactionMessageId(null);
+    setPinnedPanelOpen(false);
     setUnreadCount(0);
     isNearBottomRef.current = true;
   }}
@@ -1425,18 +1482,101 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           <header className="h-14 bg-[#313338]/95 backdrop-blur border-b border-[#1e1f22] flex items-center px-6 shadow-sm">
             <h2 className="font-bold"># {activeChannelName}</h2>
 
-            <button
-              onClick={() => setCurrentServerNotification(!soundEnabled)}
-              className={`ml-auto px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                soundEnabled
-                  ? "bg-indigo-600/20 text-indigo-200 hover:bg-indigo-600/30"
-                  : "bg-[#404249] text-gray-300 hover:bg-[#50535a]"
-              }`}
-              title="Bu sunucunun bildirim sesi"
-            >
-              {soundEnabled ? "🔔 Bu Sunucuda Açık" : "🔕 Bu Sunucuda Kapalı"}
-            </button>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={() => setPinnedPanelOpen((prev) => !prev)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  pinnedMessages.length > 0
+                    ? "bg-yellow-500/15 text-yellow-200 hover:bg-yellow-500/25"
+                    : "bg-[#404249] text-gray-300 hover:bg-[#50535a]"
+                }`}
+                title="Sabitlenen mesajlar"
+              >
+                📌 Sabitler {pinnedMessages.length > 0 ? `(${pinnedMessages.length})` : ""}
+              </button>
+
+              <button
+                onClick={() => setCurrentServerNotification(!soundEnabled)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  soundEnabled
+                    ? "bg-indigo-600/20 text-indigo-200 hover:bg-indigo-600/30"
+                    : "bg-[#404249] text-gray-300 hover:bg-[#50535a]"
+                }`}
+                title="Bu sunucunun bildirim sesi"
+              >
+                {soundEnabled ? "🔔 Bu Sunucuda Açık" : "🔕 Bu Sunucuda Kapalı"}
+              </button>
+            </div>
           </header>
+
+          {pinnedPanelOpen && (
+            <div className="border-b border-[#1e1f22] bg-[#2b2d31]/95 px-6 py-4 shadow-xl">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-black text-yellow-200">
+                    📌 Sabitlenen mesajlar
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Bu kanalda önemli görülen mesajlar
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setPinnedPanelOpen(false)}
+                  className="h-8 w-8 rounded-full bg-[#383a40] hover:bg-red-600 font-black transition"
+                  title="Kapat"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {pinnedMessages.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-[#232428] px-4 py-4 text-sm text-gray-400">
+                  Bu kanalda henüz sabitlenen mesaj yok.
+                </div>
+              ) : (
+                <div className="zenco-scroll max-h-64 space-y-2 overflow-y-auto pr-1">
+                  {pinnedMessages.map((pinnedMessage) => (
+                    <button
+                      key={pinnedMessage.id}
+                      onClick={() => {
+                        setPinnedPanelOpen(false);
+                        setTimeout(() => {
+                          const element = document.getElementById(
+                            `message-${pinnedMessage.id}`
+                          );
+
+                          element?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center",
+                          });
+                        }, 100);
+                      }}
+                      className="w-full rounded-2xl border border-yellow-500/15 bg-gradient-to-r from-yellow-500/10 to-[#232428] px-4 py-3 text-left hover:border-yellow-400/50 hover:translate-x-1 transition-all duration-200"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-yellow-500/15 text-yellow-200">
+                          📌
+                        </span>
+
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-black text-yellow-200">
+                            {pinnedMessage.username}
+                            <span className="ml-2 font-normal text-gray-500">
+                              {new Date(pinnedMessage.created_at).toLocaleString("tr-TR")}
+                            </span>
+                          </p>
+                          <p className="mt-1 truncate text-sm text-gray-200">
+                            {getShortContent(pinnedMessage.content)}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="zenco-scroll flex-1 p-5 space-y-0.5 overflow-y-auto scroll-smooth">
             {messages.map((msg) => {
@@ -1494,6 +1634,18 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                             😊
                           </button>
 
+                          <button
+                            onClick={() => togglePinMessage(msg)}
+                            className={`h-8 w-8 rounded-lg transition hover:scale-110 ${
+                              msg.pinned
+                                ? "bg-yellow-500/20 hover:bg-yellow-500/30"
+                                : "hover:bg-[#3a3c43]"
+                            }`}
+                            title={msg.pinned ? "Sabitten kaldır" : "Mesajı sabitle"}
+                          >
+                            📌
+                          </button>
+
                           {canEdit && (
                             <button
                               onClick={() => startEdit(msg)}
@@ -1548,6 +1700,13 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                       </div>
                     ) : (
                       <div>
+                        {msg.pinned && (
+                          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-yellow-500/25 bg-yellow-500/10 px-3 py-1 text-xs font-bold text-yellow-200">
+                            <span>📌</span>
+                            <span>Sabitlendi</span>
+                          </div>
+                        )}
+
                         {msg.reply_to_id && getMessageById(msg.reply_to_id) && (
                           <button
                             onClick={() => {
@@ -1951,4 +2110,4 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       </main>
     </>
   );
-}
+} 
