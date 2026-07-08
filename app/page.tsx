@@ -1478,7 +1478,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   onLogout={logout}
 />
 
-        <section className="flex-1 flex flex-col h-screen">
+        <section className="relative flex-1 flex flex-col h-screen">
           <header className="h-14 bg-[#313338]/95 backdrop-blur border-b border-[#1e1f22] flex items-center px-6 shadow-sm">
             <h2 className="font-bold"># {activeChannelName}</h2>
 
@@ -1510,20 +1510,26 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           </header>
 
           {pinnedPanelOpen && (
-            <div className="border-b border-[#1e1f22] bg-[#2b2d31]/95 px-6 py-4 shadow-xl">
-              <div className="mb-3 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-black text-yellow-200">
-                    📌 Sabitlenen mesajlar
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    Bu kanalda önemli görülen mesajlar
-                  </p>
+            <div className="absolute left-4 right-4 top-16 z-50 rounded-3xl border border-yellow-400/20 bg-[#1f2026]/95 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl animate-[fadeIn_0.15s_ease-out]">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-yellow-500/15 text-xl shadow-lg shadow-yellow-900/10">
+                    📌
+                  </span>
+
+                  <div>
+                    <p className="text-base font-black text-yellow-100">
+                      Sabitlenen mesajlar
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Bu kanalda önemli görülen mesajlar
+                    </p>
+                  </div>
                 </div>
 
                 <button
                   onClick={() => setPinnedPanelOpen(false)}
-                  className="h-8 w-8 rounded-full bg-[#383a40] hover:bg-red-600 font-black transition"
+                  className="h-9 w-9 rounded-full bg-[#383a40] hover:bg-red-600 font-black transition hover:scale-105"
                   title="Kapat"
                 >
                   ✕
@@ -1531,11 +1537,11 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
               </div>
 
               {pinnedMessages.length === 0 ? (
-                <div className="rounded-2xl border border-white/10 bg-[#232428] px-4 py-4 text-sm text-gray-400">
+                <div className="rounded-2xl border border-white/10 bg-[#232428] px-4 py-5 text-sm text-gray-400">
                   Bu kanalda henüz sabitlenen mesaj yok.
                 </div>
               ) : (
-                <div className="zenco-scroll max-h-64 space-y-2 overflow-y-auto pr-1">
+                <div className="zenco-scroll max-h-72 space-y-2 overflow-y-auto pr-1">
                   {pinnedMessages.map((pinnedMessage) => (
                     <button
                       key={pinnedMessage.id}
@@ -1552,15 +1558,15 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                           });
                         }, 100);
                       }}
-                      className="w-full rounded-2xl border border-yellow-500/15 bg-gradient-to-r from-yellow-500/10 to-[#232428] px-4 py-3 text-left hover:border-yellow-400/50 hover:translate-x-1 transition-all duration-200"
+                      className="w-full rounded-2xl border border-yellow-400/15 bg-gradient-to-r from-yellow-500/15 via-[#232428] to-[#232428] px-4 py-3 text-left shadow-lg shadow-black/10 hover:border-yellow-300/50 hover:translate-x-1 transition-all duration-200"
                     >
                       <div className="flex items-start gap-3">
-                        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-yellow-500/15 text-yellow-200">
+                        <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-yellow-500/15 text-yellow-100">
                           📌
                         </span>
 
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-black text-yellow-200">
+                          <p className="text-xs font-black text-yellow-100">
                             {pinnedMessage.username}
                             <span className="ml-2 font-normal text-gray-500">
                               {new Date(pinnedMessage.created_at).toLocaleString("tr-TR")}
@@ -1570,6 +1576,8 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                             {getShortContent(pinnedMessage.content)}
                           </p>
                         </div>
+
+                        <span className="mt-2 text-xs text-gray-500">Git →</span>
                       </div>
                     </button>
                   ))}
@@ -1701,9 +1709,11 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                     ) : (
                       <div>
                         {msg.pinned && (
-                          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-yellow-500/25 bg-yellow-500/10 px-3 py-1 text-xs font-bold text-yellow-200">
-                            <span>📌</span>
-                            <span>Sabitlendi</span>
+                          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-yellow-400/30 bg-gradient-to-r from-yellow-500/20 to-amber-500/10 px-3 py-1.5 text-xs font-black text-yellow-100 shadow-lg shadow-yellow-900/10">
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-yellow-500/20">
+                              📌
+                            </span>
+                            <span>Sabitlenen mesaj</span>
                           </div>
                         )}
 
