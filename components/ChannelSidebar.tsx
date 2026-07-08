@@ -126,8 +126,10 @@ export default function ChannelSidebar({
   const [localStatus, setLocalStatus] = useState(currentManualStatus || currentStatus);
   const serverMenuRef = useRef<HTMLDivElement>(null);
 
-  const statusInfo = getStatusInfo(currentStatus);
   const selectedManualStatus = localStatus || currentManualStatus || "online";
+  const statusInfo = getStatusInfo(
+    currentStatus === "offline" ? "offline" : selectedManualStatus
+  );
 
   useEffect(() => {
     setLocalStatus(currentManualStatus || currentStatus || "online");
@@ -237,6 +239,42 @@ export default function ChannelSidebar({
             </div>
           </div>
         )}
+      </div>
+
+      <div className="mt-4 rounded-3xl border border-white/10 bg-gradient-to-br from-[#232428] to-[#1b1c20] p-3 shadow-xl">
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("zencolive-open-friends"))}
+          className="group flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left hover:bg-indigo-600/20 transition-all duration-200 hover:translate-x-1"
+          title="Arkadaşlar ve DM"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-600/20 text-lg transition group-hover:scale-110">
+            👥
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-black text-white">Arkadaşlar</p>
+            <p className="truncate text-xs text-gray-400">DM ve istekler</p>
+          </div>
+
+          <span className="text-xs text-gray-500 transition group-hover:text-indigo-200">
+            →
+          </span>
+        </button>
+
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("zencolive-open-friends"))}
+          className="mt-1 group flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left hover:bg-[#34363d] transition-all duration-200 hover:translate-x-1"
+          title="Direkt mesajlar"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/5 text-lg transition group-hover:scale-110">
+            💬
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-black text-white">Direkt Mesajlar</p>
+            <p className="truncate text-xs text-gray-400">Yakında DM sohbeti</p>
+          </div>
+        </button>
       </div>
 
       <div className="mt-5 border-t border-[#1e1f22] pt-4">
@@ -395,7 +433,7 @@ export default function ChannelSidebar({
             className="group flex h-10 items-center justify-center rounded-2xl bg-white/5 text-lg transition hover:bg-indigo-600/30 hover:scale-105 active:scale-95"
             title="Durum"
           >
-            🟢
+            {statusInfo.icon}
           </button>
 
           <button

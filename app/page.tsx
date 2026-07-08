@@ -1901,30 +1901,6 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
             <div className="ml-auto flex items-center gap-2">
               <button
-                onClick={() => setFriendsPanelOpen((prev) => !prev)}
-                className={`group flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-xs font-black transition-all duration-200 hover:scale-[1.03] active:scale-95 ${
-                  friendsPanelOpen
-                    ? "border-indigo-300/60 bg-gradient-to-r from-indigo-500/30 to-purple-500/15 text-indigo-50 shadow-lg shadow-indigo-900/20"
-                    : incomingFriendRequests.length > 0
-                    ? "border-green-400/35 bg-gradient-to-r from-green-500/20 to-emerald-500/10 text-green-100 shadow-md shadow-green-900/10 hover:border-green-300/60"
-                    : "border-white/10 bg-[#404249] text-gray-300 hover:bg-[#50535a]"
-                }`}
-                title="Arkadaşlar"
-              >
-                <span className="flex h-6 w-6 items-center justify-center rounded-xl bg-indigo-500/20">
-                  👥
-                </span>
-
-                <span>Arkadaşlar</span>
-
-                {incomingFriendRequests.length > 0 && (
-                  <span className="rounded-full bg-green-500 px-2 py-0.5 text-[11px] text-white">
-                    {incomingFriendRequests.length}
-                  </span>
-                )}
-              </button>
-
-              <button
                 onClick={() => setPinnedPanelOpen((prev) => !prev)}
                 className={`group flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-xs font-black transition-all duration-200 hover:scale-[1.03] active:scale-95 ${
                   pinnedPanelOpen
@@ -1972,10 +1948,10 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
                   <div>
                     <p className="text-base font-black text-indigo-100">
-                      Arkadaşlar
+                      Direkt Mesajlar / Arkadaşlar
                     </p>
                     <p className="text-xs text-gray-400">
-                      İstekler, arkadaş listesi ve kullanıcı arama
+                      Discord gibi arkadaş isteği, liste ve DM altyapısı
                     </p>
                   </div>
                 </div>
