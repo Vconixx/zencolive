@@ -1511,6 +1511,18 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   }, [currentUserId]);
 
   useEffect(() => {
+    function openFriendsFromSidebar() {
+      setFriendsPanelOpen(true);
+    }
+
+    window.addEventListener("zencolive-open-friends", openFriendsFromSidebar);
+
+    return () => {
+      window.removeEventListener("zencolive-open-friends", openFriendsFromSidebar);
+    };
+  }, []);
+
+  useEffect(() => {
     if (currentUserId) getServers();
   }, [currentUserId]);
 
@@ -1642,18 +1654,24 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     if (!currentUserId) return;
 
     const friendsChannel = supabase
-      .channel(`friends-channel-${currentUserId}`)
+      .channel(`friends-live-${currentUserId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "friends" },
-        () => {
-          getFriends();
+        async () => {
+          await getFriends();
+          await getProfiles();
         }
       )
       .subscribe();
 
+    const fallbackInterval = setInterval(() => {
+      getFriends();
+    }, 4000);
+
     return () => {
       supabase.removeChannel(friendsChannel);
+      clearInterval(fallbackInterval);
     };
   }, [currentUserId]);
 

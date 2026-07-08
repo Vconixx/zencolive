@@ -239,23 +239,6 @@ export default function ChannelSidebar({
         )}
       </div>
 
-
-      <div className="mt-4 rounded-2xl border border-white/10 bg-[#232428] p-3 shadow-lg">
-        <button
-          className="flex w-full items-center justify-between rounded-xl px-2 py-2 text-left hover:bg-[#34363d] transition"
-          title="Arkadaşlar yakında"
-        >
-          <span className="text-sm font-black">👥 Arkadaşlar</span>
-          <span className="rounded-full bg-indigo-600/20 px-2 py-0.5 text-[11px] font-black text-indigo-200">
-            Yakında
-          </span>
-        </button>
-
-        <p className="mt-1 px-2 text-xs text-gray-500">
-          Arkadaş ekleme ve DM sistemi için hazır alan.
-        </p>
-      </div>
-
       <div className="mt-5 border-t border-[#1e1f22] pt-4">
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs text-gray-400 font-bold tracking-wide">
@@ -329,38 +312,58 @@ export default function ChannelSidebar({
         />
       </div>
 
-      <div className="relative mt-auto rounded-2xl border border-[#3b3d44] bg-[#232428] p-3 shadow-lg">
+      <div className="relative mt-auto rounded-[28px] border border-white/10 bg-gradient-to-br from-[#2b2d31] via-[#232428] to-[#17181c] p-3 shadow-2xl shadow-black/30 overflow-visible">
+        <div
+          className="pointer-events-none absolute inset-0 rounded-[28px] opacity-60"
+          style={{
+            background: `radial-gradient(circle at 20% 0%, ${currentProfileColor}33, transparent 38%)`,
+          }}
+        />
+
         {statusMenuOpen && (
-          <div className="absolute bottom-[92px] left-0 right-0 z-50 rounded-2xl border border-white/10 bg-[#1f2026] p-2 shadow-2xl">
-            <p className="px-3 pb-2 pt-1 text-xs font-black text-gray-400">
-              DURUMUNU DEĞİŞTİR
-            </p>
+          <div className="absolute bottom-[86px] left-0 right-0 z-50 rounded-3xl border border-white/10 bg-[#111214]/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl animate-[fadeIn_0.15s_ease-out]">
+            <div className="px-3 pb-2 pt-2">
+              <p className="text-xs font-black tracking-wide text-gray-400">
+                DURUMUNU DEĞİŞTİR
+              </p>
+            </div>
 
             <div className="space-y-1">
               {statusOptions.map((item) => (
                 <button
                   key={item.value}
                   onClick={() => updateStatus(item.value)}
-                  className={`w-full rounded-xl px-3 py-2 text-left transition hover:bg-[#34363d] ${
+                  className={`group flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-all duration-200 hover:bg-[#2b2d31] ${
                     selectedManualStatus === item.value
-                      ? "bg-indigo-600/20"
+                      ? "bg-indigo-600/20 ring-1 ring-indigo-500/30"
                       : ""
                   }`}
                 >
-                  <span className="mr-2">{item.icon}</span>
-                  <span className={`text-sm font-bold ${item.color}`}>
-                    {item.label}
+                  <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white/5 text-lg transition group-hover:scale-110">
+                    {item.icon}
                   </span>
+
+                  <div>
+                    <p className={`text-sm font-black ${item.color}`}>
+                      {item.label}
+                    </p>
+                    <p className="text-[11px] text-gray-500">
+                      {item.value === "online" && "Herkes seni aktif görür."}
+                      {item.value === "idle" && "Boştaymış gibi görünürsün."}
+                      {item.value === "dnd" && "Rahatsız edilmiyorsun."}
+                      {item.value === "invisible" && "Çevrimdışı gibi görünürsün."}
+                    </p>
+                  </div>
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        <div className="flex items-center gap-3">
+        <div className="relative flex items-center gap-3">
           <button
             onClick={() => setStatusMenuOpen((prev) => !prev)}
-            className="relative transition hover:scale-105"
+            className="relative shrink-0 transition hover:scale-105 active:scale-95"
             title="Durum değiştir"
           >
             <MiniAvatar
@@ -369,7 +372,7 @@ export default function ChannelSidebar({
               profileColor={currentProfileColor}
             />
 
-            <span className="absolute -bottom-1 -right-1 rounded-full border-4 border-[#232428] text-xs">
+            <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-4 border-[#232428] bg-[#111214] text-[11px] shadow-lg">
               {statusInfo.icon}
             </span>
           </button>
@@ -379,26 +382,48 @@ export default function ChannelSidebar({
             className="min-w-0 flex-1 text-left"
             title="Durum değiştir"
           >
-            <p className="truncate text-sm font-black">{username}</p>
-            <p className={`text-xs font-bold ${statusInfo.color}`}>
+            <p className="truncate text-sm font-black text-white">{username}</p>
+            <p className={`truncate text-xs font-bold ${statusInfo.color}`}>
               {statusInfo.label}
             </p>
           </button>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="relative mt-3 grid grid-cols-4 gap-2">
           <button
             onClick={() => setStatusMenuOpen((prev) => !prev)}
-            className="rounded-xl bg-[#383a40] px-3 py-2 text-xs font-black hover:bg-indigo-600 transition"
+            className="group flex h-10 items-center justify-center rounded-2xl bg-white/5 text-lg transition hover:bg-indigo-600/30 hover:scale-105 active:scale-95"
+            title="Durum"
           >
-            Durum
+            🟢
+          </button>
+
+          <button
+            onClick={() => {
+              window.location.href = "/settings";
+            }}
+            className="group flex h-10 items-center justify-center rounded-2xl bg-white/5 text-lg transition hover:bg-indigo-600/30 hover:scale-105 active:scale-95"
+            title="Ayarlar"
+          >
+            ⚙️
+          </button>
+
+          <button
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("zencolive-open-friends"));
+            }}
+            className="group flex h-10 items-center justify-center rounded-2xl bg-white/5 text-lg transition hover:bg-indigo-600/30 hover:scale-105 active:scale-95"
+            title="Arkadaşlar"
+          >
+            👥
           </button>
 
           <button
             onClick={onLogout}
-            className="rounded-xl bg-red-600 px-3 py-2 text-xs font-black hover:bg-red-700 transition"
+            className="group flex h-10 items-center justify-center rounded-2xl bg-red-600/90 text-lg transition hover:bg-red-700 hover:scale-105 active:scale-95 shadow-lg shadow-red-900/20"
+            title="Çıkış yap"
           >
-            Çıkış Yap
+            🚪
           </button>
         </div>
       </div>
