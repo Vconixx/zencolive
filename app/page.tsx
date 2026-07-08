@@ -2183,24 +2183,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                     </p>
                   </div>
 
-                  <div className="rounded-2xl bg-[#232428] p-4">
-                    
-
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="h-5 w-5 rounded-full"
-                        style={{
-                          backgroundColor: getSafeProfileColor(
-                            selectedProfile.profile_color
-                          ),
-                        }}
-                      />
-                      <span className="text-sm text-gray-300">
-                        {getSafeProfileColor(selectedProfile.profile_color)}
-                      </span>
-                    </div>
-                  </div>
-
+                  
                   <div className="rounded-2xl bg-[#232428] p-4">
                     <p className="mb-1 text-xs font-black text-gray-400">
                       KATILMA TARİHİ
