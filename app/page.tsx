@@ -2184,9 +2184,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                   </div>
 
                   <div className="rounded-2xl bg-[#232428] p-4">
-                    <p className="mb-1 text-xs font-black text-gray-400">
-                      PROFİL RENGİ
-                    </p>
+                    
 
                     <div className="flex items-center gap-2">
                       <span
