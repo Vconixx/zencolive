@@ -231,6 +231,7 @@ export default function Home() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState("");
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
+  const [openReactionMessageId, setOpenReactionMessageId] = useState<number | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [toast, setToast] = useState("");
@@ -443,18 +444,16 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   async function toggleReaction(messageId: number, emoji: string) {
     if (!currentUserId) return;
 
-    const existingReaction = messageReactions.find(
+    const myCurrentReaction = messageReactions.find(
       (reaction) =>
-        reaction.message_id === messageId &&
-        reaction.user_id === currentUserId &&
-        reaction.emoji === emoji
+        reaction.message_id === messageId && reaction.user_id === currentUserId
     );
 
-    if (existingReaction) {
+    if (myCurrentReaction?.emoji === emoji) {
       const { error } = await supabase
         .from("message_reactions")
         .delete()
-        .eq("id", existingReaction.id);
+        .eq("id", myCurrentReaction.id);
 
       if (error) {
         showToast("Reaksiyon kaldırılamadı: " + error.message, "error");
@@ -462,10 +461,27 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       }
 
       setMessageReactions((prev) =>
-        prev.filter((reaction) => reaction.id !== existingReaction.id)
+        prev.filter((reaction) => reaction.id !== myCurrentReaction.id)
       );
+      setOpenReactionMessageId(null);
 
       return;
+    }
+
+    if (myCurrentReaction) {
+      const { error: deleteError } = await supabase
+        .from("message_reactions")
+        .delete()
+        .eq("id", myCurrentReaction.id);
+
+      if (deleteError) {
+        showToast("Eski reaksiyon kaldırılamadı: " + deleteError.message, "error");
+        return;
+      }
+
+      setMessageReactions((prev) =>
+        prev.filter((reaction) => reaction.id !== myCurrentReaction.id)
+      );
     }
 
     const { data, error } = await supabase
@@ -481,6 +497,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     if (error) {
       if (error.code === "23505") {
         await getReactions(messages.map((message) => message.id));
+        setOpenReactionMessageId(null);
         return;
       }
 
@@ -490,13 +507,19 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
     if (data) {
       setMessageReactions((prev) => {
-        const alreadyExists = prev.some((reaction) => reaction.id === data.id);
+        const withoutMyOldReaction = prev.filter(
+          (reaction) =>
+            !(
+              reaction.message_id === messageId &&
+              reaction.user_id === currentUserId
+            )
+        );
 
-        if (alreadyExists) return prev;
-
-        return [...prev, data];
+        return [...withoutMyOldReaction, data];
       });
     }
+
+    setOpenReactionMessageId(null);
   }
 
   function renderMessageReactions(messageId: number) {
@@ -524,20 +547,26 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           </div>
         )}
 
-        <div className="pointer-events-none absolute -top-10 left-0 z-20 opacity-0 translate-y-1 group-hover:pointer-events-auto group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200">
-          <div className="flex items-center gap-1 rounded-full bg-[#1f2026] border border-[#404249] px-2 py-1 shadow-xl">
-            {reactionEmojis.map((emoji) => (
-              <button
-                key={emoji}
-                onClick={() => toggleReaction(messageId, emoji)}
-                className="w-7 h-7 rounded-full hover:bg-[#3a3c43] transition-all duration-200 hover:scale-125 active:scale-95"
-                title={`${emoji} ekle`}
-              >
-                {emoji}
-              </button>
-            ))}
+        {openReactionMessageId === messageId && (
+          <div className="absolute left-0 top-9 z-40 rounded-2xl border border-white/10 bg-[#1f2026] p-2 shadow-2xl animate-[fadeIn_0.12s_ease-out]">
+            <div className="mb-1 px-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+              Reaksiyon seç
+            </div>
+
+            <div className="flex items-center gap-1">
+              {reactionEmojis.map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => toggleReaction(messageId, emoji)}
+                  className="h-9 w-9 rounded-xl text-lg transition-all duration-200 hover:bg-indigo-600/25 hover:scale-125 active:scale-95"
+                  title={`${emoji} ekle`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     );
   }
@@ -946,6 +975,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   }
 
   async function sendMessage() {
+    setOpenReactionMessageId(null);
     if (!content.trim()) return;
     if (!activeServerId || !activeChannelId) return;
 
@@ -1064,6 +1094,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       setEditingId(null);
       setContent("");
       setReplyToMessage(null);
+      setOpenReactionMessageId(null);
       setMessages([]);
       setMessageReactions([]);
     }
@@ -1383,6 +1414,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     setEditingId(null);
     setContent("");
     setReplyToMessage(null);
+    setOpenReactionMessageId(null);
     setUnreadCount(0);
     isNearBottomRef.current = true;
   }}
@@ -1440,31 +1472,48 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                         {msg.edited_at && " · düzenlendi"}
                       </span>
 
-                      <div className="opacity-0 group-hover:opacity-100 flex gap-2 ml-2 transition-opacity duration-200">
-                        <button
-                          onClick={() => startReply(msg)}
-                          className="text-xs text-indigo-300 hover:underline"
-                        >
-                          Cevapla
-                        </button>
-
-                        {canEdit && (
+                      <div className="absolute right-4 -top-4 z-30 opacity-0 group-hover:opacity-100 transition-all duration-200">
+                        <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-[#1f2026] p-1 shadow-xl">
                           <button
-                            onClick={() => startEdit(msg)}
-                            className="text-xs text-blue-400 hover:underline"
+                            onClick={() => startReply(msg)}
+                            className="h-8 w-8 rounded-lg hover:bg-[#3a3c43] transition hover:scale-110"
+                            title="Cevapla"
                           >
-                            Düzenle
+                            💬
                           </button>
-                        )}
 
-                        {canDelete && (
                           <button
-                            onClick={() => deleteMessage(msg)}
-                            className="text-xs text-red-400 hover:underline"
+                            onClick={() =>
+                              setOpenReactionMessageId((prev) =>
+                                prev === msg.id ? null : msg.id
+                              )
+                            }
+                            className="h-8 w-8 rounded-lg hover:bg-[#3a3c43] transition hover:scale-110"
+                            title="Reaksiyon ekle"
                           >
-                            Sil
+                            😊
                           </button>
-                        )}
+
+                          {canEdit && (
+                            <button
+                              onClick={() => startEdit(msg)}
+                              className="h-8 w-8 rounded-lg hover:bg-[#3a3c43] transition hover:scale-110"
+                              title="Düzenle"
+                            >
+                              ✏️
+                            </button>
+                          )}
+
+                          {canDelete && (
+                            <button
+                              onClick={() => deleteMessage(msg)}
+                              className="h-8 w-8 rounded-lg hover:bg-red-600/80 transition hover:scale-110"
+                              title="Sil"
+                            >
+                              🗑️
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
 
