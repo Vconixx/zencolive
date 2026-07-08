@@ -347,6 +347,9 @@ export default function Home() {
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [friends, setFriends] = useState<FriendRow[]>([]);
   const [friendsPanelOpen, setFriendsPanelOpen] = useState(false);
+  const [appView, setAppView] = useState<"server" | "friends">("server");
+  const [friendsTab, setFriendsTab] = useState<"online" | "all" | "pending" | "add">("all");
+  const [selectedDmProfileId, setSelectedDmProfileId] = useState<string | null>(null);
   const [friendSearch, setFriendSearch] = useState("");
   const [friendSearchResults, setFriendSearchResults] = useState<Profile[]>([]);
   const [friendSearchLoading, setFriendSearchLoading] = useState(false);
@@ -1512,7 +1515,9 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
   useEffect(() => {
     function openFriendsFromSidebar() {
-      setFriendsPanelOpen(true);
+      setAppView("friends");
+      setFriendsPanelOpen(false);
+      setPinnedPanelOpen(false);
     }
 
     window.addEventListener("zencolive-open-friends", openFriendsFromSidebar);
@@ -1768,6 +1773,8 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           servers={servers}
           activeServerId={activeServerId}
           onSelectServer={(serverId) => {
+            setAppView("server");
+            setFriendsPanelOpen(false);
             setActiveServerId(serverId);
             setActiveChannelId("");
             setEditingId(null);
@@ -1776,12 +1783,14 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           onCreateServer={() => setServerActionOpen(true)}
           onOpenSettings={() => router.push("/settings")}
           onOpenFriends={() => {
-            setFriendsPanelOpen(true);
+            setAppView("friends");
+            setFriendsPanelOpen(false);
             setPinnedPanelOpen(false);
           }}
-          friendsActive={friendsPanelOpen}
+          friendsActive={appView === "friends"}
         />
 
+        {appView === "server" ? (
         <ChannelSidebar
   activeServer={activeServer}
   textChannels={textChannels}
@@ -1899,8 +1908,530 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   }}
   onLogout={logout}
 />
+        ) : (
+          <aside className="w-64 bg-[#2b2d31] p-4 flex flex-col border-r border-black/30 shadow-xl">
+            <div className="rounded-3xl border border-indigo-400/20 bg-gradient-to-br from-[#232428] via-[#202127] to-[#17181c] p-4 shadow-2xl shadow-black/30">
+              <div className="flex items-center gap-3">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600/25 text-2xl shadow-lg shadow-indigo-900/20">
+                  👥
+                </span>
+
+                <div className="min-w-0">
+                  <p className="truncate text-lg font-black text-white">
+                    Arkadaşlar
+                  </p>
+                  <p className="truncate text-xs text-gray-400">
+                    DM ve sosyal alan
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-2">
+              <button
+                onClick={() => {
+                  setFriendsTab("online");
+                  setSelectedDmProfileId(null);
+                }}
+                className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
+                  friendsTab === "online" && !selectedDmProfileId
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-900/30"
+                    : "bg-[#36383f] hover:bg-[#44464f] text-gray-200"
+                }`}
+              >
+                <span>🟢</span>
+                <span className="font-black">Çevrimiçi</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setFriendsTab("all");
+                  setSelectedDmProfileId(null);
+                }}
+                className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
+                  friendsTab === "all" && !selectedDmProfileId
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-900/30"
+                    : "bg-[#36383f] hover:bg-[#44464f] text-gray-200"
+                }`}
+              >
+                <span>👥</span>
+                <span className="font-black">Tüm Arkadaşlar</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setFriendsTab("pending");
+                  setSelectedDmProfileId(null);
+                }}
+                className={`flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left transition ${
+                  friendsTab === "pending" && !selectedDmProfileId
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-900/30"
+                    : "bg-[#36383f] hover:bg-[#44464f] text-gray-200"
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <span>⏳</span>
+                  <span className="font-black">Bekleyen</span>
+                </span>
+
+                {incomingFriendRequests.length + outgoingFriendRequests.length > 0 && (
+                  <span className="rounded-full bg-green-500 px-2 py-0.5 text-xs font-black text-white">
+                    {incomingFriendRequests.length + outgoingFriendRequests.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => {
+                  setFriendsTab("add");
+                  setSelectedDmProfileId(null);
+                }}
+                className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
+                  friendsTab === "add" && !selectedDmProfileId
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-900/30"
+                    : "bg-[#36383f] hover:bg-[#44464f] text-gray-200"
+                }`}
+              >
+                <span>➕</span>
+                <span className="font-black">Arkadaş Ekle</span>
+              </button>
+            </div>
+
+            <div className="mt-5 border-t border-white/10 pt-4">
+              <p className="mb-2 px-2 text-xs font-black text-gray-400">
+                DİREKT MESAJLAR
+              </p>
+
+              {friendProfiles.length === 0 ? (
+                <p className="rounded-2xl bg-[#232428] p-3 text-xs text-gray-500">
+                  Henüz DM gösterecek arkadaşın yok.
+                </p>
+              ) : (
+                <div className="zenco-scroll max-h-[320px] space-y-1 overflow-y-auto pr-1">
+                  {friendProfiles.map(({ profile }) => {
+                    if (!profile) return null;
+
+                    const statusInfo = getProfileStatusInfo(profile);
+
+                    return (
+                      <button
+                        key={profile.id}
+                        onClick={() => {
+                          setSelectedDmProfileId(profile.id);
+                          setFriendsTab("all");
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition ${
+                          selectedDmProfileId === profile.id
+                            ? "bg-indigo-600 text-white"
+                            : "hover:bg-[#36383f] text-gray-200"
+                        }`}
+                      >
+                        <Avatar
+                          username={profile.username}
+                          avatarUrl={profile.avatar_url}
+                          size="sm"
+                        />
+
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-black">
+                            {profile.username}
+                          </p>
+                          <p className={`truncate text-[11px] font-bold ${statusInfo.textClass}`}>
+                            {statusInfo.icon} {statusInfo.label}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </aside>
+        )}
 
         <section className="relative flex-1 flex flex-col h-screen">
+          {appView === "friends" ? (
+            <div className="flex h-full flex-col bg-[#313338]">
+              <header className="h-14 border-b border-[#1e1f22] bg-[#313338]/95 px-6 flex items-center shadow-sm">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-600/20 text-lg">
+                    👥
+                  </span>
+
+                  <div>
+                    <h2 className="text-base font-black">Arkadaşlar</h2>
+                    <p className="text-xs text-gray-400">
+                      Arkadaşlarını yönet ve DM başlat
+                    </p>
+                  </div>
+                </div>
+              </header>
+
+              <div className="zenco-scroll flex-1 overflow-y-auto p-6">
+                {selectedDmProfileId ? (
+                  (() => {
+                    const dmProfile = profiles.find(
+                      (profile) => profile.id === selectedDmProfileId
+                    );
+
+                    if (!dmProfile) return null;
+
+                    const statusInfo = getProfileStatusInfo(dmProfile);
+
+                    return (
+                      <div className="mx-auto flex h-full max-w-5xl flex-col rounded-[32px] border border-indigo-400/20 bg-[#1f2026] shadow-2xl shadow-black/30 overflow-hidden">
+                        <div
+                          className="h-32 bg-cover bg-center"
+                          style={
+                            dmProfile.banner_url
+                              ? {
+                                  backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,.1), rgba(0,0,0,.75)), url(${dmProfile.banner_url})`,
+                                }
+                              : {
+                                  background: `linear-gradient(135deg, ${getSafeProfileColor(
+                                    dmProfile.profile_color
+                                  )}, #111214)`,
+                                }
+                          }
+                        />
+
+                        <div className="border-b border-white/10 p-5">
+                          <div className="-mt-14 flex items-end gap-4">
+                            <Avatar
+                              username={dmProfile.username}
+                              avatarUrl={dmProfile.avatar_url}
+                              size="lg"
+                            />
+
+                            <div className="pb-1">
+                              <h3 className="text-2xl font-black">
+                                {dmProfile.username}
+                              </h3>
+                              <p className={`text-sm font-bold ${statusInfo.textClass}`}>
+                                {statusInfo.icon} {statusInfo.label}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-5 rounded-2xl bg-[#232428] p-4">
+                            <p className="mb-1 text-xs font-black text-gray-400">
+                              HAKKIMDA
+                            </p>
+                            <p className="text-sm text-gray-300">
+                              {dmProfile.about?.trim() || "Henüz hakkında bilgisi yok."}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-1 items-center justify-center p-8 text-center">
+                          <div>
+                            <p className="text-5xl mb-4">💬</p>
+                            <h3 className="text-xl font-black">
+                              DM sohbeti bir sonraki adımda açılacak
+                            </h3>
+                            <p className="mt-2 max-w-md text-sm text-gray-400">
+                              Altyapı hazır. Sonraki adımda bu alana gerçek özel mesajlaşmayı bağlayacağız.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div className="mx-auto max-w-6xl">
+                    <div className="mb-6 rounded-[32px] border border-indigo-400/20 bg-gradient-to-br from-[#232428] to-[#1b1c20] p-6 shadow-2xl shadow-black/30">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <h1 className="text-3xl font-black">Arkadaşlar</h1>
+                          <p className="mt-1 text-sm text-gray-400">
+                            Çevrimiçi arkadaşlarını gör, istekleri yönet ve DM başlat.
+                          </p>
+                        </div>
+
+                        <button
+                          onClick={() => setFriendsTab("add")}
+                          className="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black hover:bg-indigo-700 transition hover:scale-[1.02]"
+                        >
+                          + Arkadaş Ekle
+                        </button>
+                      </div>
+                    </div>
+
+                    {friendsTab === "add" && (
+                      <div className="rounded-[28px] border border-white/10 bg-[#232428] p-5 shadow-xl">
+                        <p className="mb-3 text-xs font-black text-gray-400">
+                          ARKADAŞ EKLE
+                        </p>
+
+                        <div className="flex gap-2">
+                          <input
+                            value={friendSearch}
+                            onChange={(e) => setFriendSearch(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") searchUsersForFriend();
+                            }}
+                            className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-[#383a40] px-4 py-3 text-sm outline-none focus:border-indigo-500"
+                            placeholder="Kullanıcı adı ara..."
+                          />
+
+                          <button
+                            onClick={searchUsersForFriend}
+                            disabled={friendSearchLoading}
+                            className="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black hover:bg-indigo-700 disabled:opacity-60"
+                          >
+                            {friendSearchLoading ? "Aranıyor..." : "Ara"}
+                          </button>
+                        </div>
+
+                        {friendSearchResults.length > 0 && (
+                          <div className="mt-4 grid gap-3 md:grid-cols-2">
+                            {friendSearchResults.map((profile) => {
+                              const relationState = getFriendButtonState(profile.id);
+                              const statusInfo = getProfileStatusInfo(profile);
+
+                              return (
+                                <div
+                                  key={profile.id}
+                                  className="flex items-center gap-3 rounded-2xl bg-[#1f2026] p-3"
+                                >
+                                  <Avatar
+                                    username={profile.username}
+                                    avatarUrl={profile.avatar_url}
+                                    size="sm"
+                                  />
+
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-black">
+                                      {profile.username}
+                                    </p>
+                                    <p className={`text-xs font-bold ${statusInfo.textClass}`}>
+                                      {statusInfo.icon} {statusInfo.label}
+                                    </p>
+                                  </div>
+
+                                  {relationState === "none" && (
+                                    <button
+                                      onClick={() => sendFriendRequest(profile.id)}
+                                      className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black hover:bg-indigo-700"
+                                    >
+                                      Ekle
+                                    </button>
+                                  )}
+
+                                  {relationState === "outgoing" && (
+                                    <span className="rounded-xl bg-yellow-500/15 px-3 py-2 text-xs font-black text-yellow-200">
+                                      Bekliyor
+                                    </span>
+                                  )}
+
+                                  {relationState === "incoming" && (
+                                    <span className="rounded-xl bg-green-500/15 px-3 py-2 text-xs font-black text-green-200">
+                                      İstek var
+                                    </span>
+                                  )}
+
+                                  {relationState === "accepted" && (
+                                    <span className="rounded-xl bg-green-500/15 px-3 py-2 text-xs font-black text-green-200">
+                                      Arkadaş
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {friendsTab === "pending" && (
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <div className="rounded-[28px] border border-white/10 bg-[#232428] p-5 shadow-xl">
+                          <p className="mb-3 text-xs font-black text-gray-400">
+                            GELEN İSTEKLER
+                          </p>
+
+                          {incomingFriendRequests.length === 0 ? (
+                            <p className="rounded-2xl bg-[#1f2026] p-4 text-sm text-gray-400">
+                              Gelen arkadaşlık isteği yok.
+                            </p>
+                          ) : (
+                            <div className="space-y-2">
+                              {incomingFriendRequests.map((request) => {
+                                const profile = profiles.find(
+                                  (item) => item.id === request.sender_id
+                                );
+
+                                if (!profile) return null;
+
+                                return (
+                                  <div
+                                    key={request.id}
+                                    className="flex items-center gap-3 rounded-2xl bg-[#1f2026] p-3"
+                                  >
+                                    <Avatar
+                                      username={profile.username}
+                                      avatarUrl={profile.avatar_url}
+                                      size="sm"
+                                    />
+
+                                    <div className="min-w-0 flex-1">
+                                      <p className="truncate text-sm font-black">
+                                        {profile.username}
+                                      </p>
+                                      <p className="text-xs text-gray-400">
+                                        Arkadaşlık isteği gönderdi
+                                      </p>
+                                    </div>
+
+                                    <button
+                                      onClick={() => acceptFriendRequest(request.id)}
+                                      className="rounded-xl bg-green-600 px-3 py-2 text-xs font-black hover:bg-green-700"
+                                    >
+                                      Kabul
+                                    </button>
+
+                                    <button
+                                      onClick={() => rejectFriendRequest(request.id)}
+                                      className="rounded-xl bg-red-600 px-3 py-2 text-xs font-black hover:bg-red-700"
+                                    >
+                                      Reddet
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="rounded-[28px] border border-white/10 bg-[#232428] p-5 shadow-xl">
+                          <p className="mb-3 text-xs font-black text-gray-400">
+                            GÖNDERİLEN İSTEKLER
+                          </p>
+
+                          {outgoingFriendRequests.length === 0 ? (
+                            <p className="rounded-2xl bg-[#1f2026] p-4 text-sm text-gray-400">
+                              Bekleyen gönderilmiş isteğin yok.
+                            </p>
+                          ) : (
+                            <div className="space-y-2">
+                              {outgoingFriendRequests.map((request) => {
+                                const profile = profiles.find(
+                                  (item) => item.id === request.receiver_id
+                                );
+
+                                if (!profile) return null;
+
+                                return (
+                                  <div
+                                    key={request.id}
+                                    className="flex items-center gap-3 rounded-2xl bg-[#1f2026] p-3"
+                                  >
+                                    <Avatar
+                                      username={profile.username}
+                                      avatarUrl={profile.avatar_url}
+                                      size="sm"
+                                    />
+
+                                    <div className="min-w-0 flex-1">
+                                      <p className="truncate text-sm font-black">
+                                        {profile.username}
+                                      </p>
+                                      <p className="text-xs text-yellow-300">
+                                        İstek bekliyor
+                                      </p>
+                                    </div>
+
+                                    <button
+                                      onClick={() => rejectFriendRequest(request.id)}
+                                      className="rounded-xl bg-[#383a40] px-3 py-2 text-xs font-black hover:bg-red-600 transition"
+                                    >
+                                      İptal
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {(friendsTab === "all" || friendsTab === "online") && (
+                      <div className="rounded-[28px] border border-white/10 bg-[#232428] p-5 shadow-xl">
+                        <p className="mb-3 text-xs font-black text-gray-400">
+                          {friendsTab === "online"
+                            ? "ÇEVRİMİÇİ ARKADAŞLAR"
+                            : "TÜM ARKADAŞLAR"}
+                        </p>
+
+                        {friendProfiles.filter(({ profile }) =>
+                          friendsTab === "online" ? isProfileOnline(profile) : true
+                        ).length === 0 ? (
+                          <p className="rounded-2xl bg-[#1f2026] p-4 text-sm text-gray-400">
+                            Gösterilecek arkadaş yok.
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {friendProfiles
+                              .filter(({ profile }) =>
+                                friendsTab === "online" ? isProfileOnline(profile) : true
+                              )
+                              .map(({ friend, profile }) => {
+                                if (!profile) return null;
+
+                                const statusInfo = getProfileStatusInfo(profile);
+
+                                return (
+                                  <div
+                                    key={friend.id}
+                                    className="flex items-center gap-3 rounded-2xl bg-[#1f2026] p-3 hover:bg-[#2b2d31] transition"
+                                  >
+                                    <button onClick={() => setSelectedProfile(profile)}>
+                                      <Avatar
+                                        username={profile.username}
+                                        avatarUrl={profile.avatar_url}
+                                        size="sm"
+                                      />
+                                    </button>
+
+                                    <button
+                                      onClick={() => setSelectedProfile(profile)}
+                                      className="min-w-0 flex-1 text-left"
+                                    >
+                                      <p className="truncate text-sm font-black">
+                                        {profile.username}
+                                      </p>
+                                      <p className={`text-xs font-bold ${statusInfo.textClass}`}>
+                                        {statusInfo.icon} {statusInfo.label}
+                                      </p>
+                                    </button>
+
+                                    <button
+                                      onClick={() => setSelectedDmProfileId(profile.id)}
+                                      className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black hover:bg-indigo-700 transition"
+                                    >
+                                      DM
+                                    </button>
+
+                                    <button
+                                      onClick={() => removeFriend(friend.id)}
+                                      className="rounded-xl bg-[#383a40] px-3 py-2 text-xs font-black hover:bg-red-600 transition"
+                                    >
+                                      Kaldır
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
           <header className="h-14 bg-[#313338]/95 backdrop-blur border-b border-[#1e1f22] flex items-center px-6 shadow-sm">
             <h2 className="font-bold"># {activeChannelName}</h2>
 
@@ -1942,248 +2473,6 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
               </button>
             </div>
           </header>
-
-          {friendsPanelOpen && (
-            <div className="absolute inset-4 top-16 z-50 rounded-[32px] border border-indigo-400/20 bg-[#1f2026]/98 p-5 shadow-2xl shadow-black/50 backdrop-blur-xl animate-[fadeIn_0.15s_ease-out] overflow-hidden">
-              <div className="mb-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-500/15 text-xl shadow-lg shadow-indigo-900/10">
-                    👥
-                  </span>
-
-                  <div>
-                    <p className="text-xl font-black text-indigo-100">
-                      Arkadaşlar
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      Buradan arkadaşlarını yönet, istekleri kabul et ve DM başlat.
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => setFriendsPanelOpen(false)}
-                  className="h-9 w-9 rounded-full bg-[#383a40] hover:bg-red-600 font-black transition hover:scale-105"
-                  title="Kapat"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-                <div className="space-y-4">
-                  <div className="rounded-2xl border border-white/10 bg-[#232428] p-3">
-                    <p className="mb-3 text-xs font-black text-gray-400">
-                      ARKADAŞ EKLE
-                    </p>
-
-                    <div className="flex gap-2">
-                      <input
-                        value={friendSearch}
-                        onChange={(e) => setFriendSearch(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") searchUsersForFriend();
-                        }}
-                        className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#383a40] px-3 py-2 text-sm outline-none focus:border-indigo-500"
-                        placeholder="Kullanıcı adı ara..."
-                      />
-
-                      <button
-                        onClick={searchUsersForFriend}
-                        disabled={friendSearchLoading}
-                        className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-black hover:bg-indigo-700 disabled:opacity-60"
-                      >
-                        {friendSearchLoading ? "..." : "Ara"}
-                      </button>
-                    </div>
-
-                    {friendSearchResults.length > 0 && (
-                      <div className="mt-3 space-y-2">
-                        {friendSearchResults.map((profile) => {
-                          const relationState = getFriendButtonState(profile.id);
-
-                          return (
-                            <div
-                              key={profile.id}
-                              className="flex items-center gap-3 rounded-2xl bg-[#1f2026] p-3"
-                            >
-                              <Avatar
-                                username={profile.username}
-                                avatarUrl={profile.avatar_url}
-                                size="sm"
-                              />
-
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-black">
-                                  {profile.username}
-                                </p>
-                                <p
-                                  className={`text-xs font-bold ${
-                                    getProfileStatusInfo(profile).textClass
-                                  }`}
-                                >
-                                  {getProfileStatusInfo(profile).icon}{" "}
-                                  {getProfileStatusInfo(profile).label}
-                                </p>
-                              </div>
-
-                              {relationState === "none" && (
-                                <button
-                                  onClick={() => sendFriendRequest(profile.id)}
-                                  className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black hover:bg-indigo-700"
-                                >
-                                  Ekle
-                                </button>
-                              )}
-
-                              {relationState === "outgoing" && (
-                                <span className="rounded-xl bg-yellow-500/15 px-3 py-2 text-xs font-black text-yellow-200">
-                                  Bekliyor
-                                </span>
-                              )}
-
-                              {relationState === "incoming" && (
-                                <span className="rounded-xl bg-green-500/15 px-3 py-2 text-xs font-black text-green-200">
-                                  İstek var
-                                </span>
-                              )}
-
-                              {relationState === "accepted" && (
-                                <span className="rounded-xl bg-green-500/15 px-3 py-2 text-xs font-black text-green-200">
-                                  Arkadaş
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-[#232428] p-3">
-                    <p className="mb-3 text-xs font-black text-gray-400">
-                      GELEN İSTEKLER
-                    </p>
-
-                    {incomingFriendRequests.length === 0 ? (
-                      <p className="rounded-xl bg-[#1f2026] p-3 text-sm text-gray-400">
-                        Gelen arkadaşlık isteği yok.
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {incomingFriendRequests.map((request) => {
-                          const profile = profiles.find(
-                            (item) => item.id === request.sender_id
-                          );
-
-                          if (!profile) return null;
-
-                          return (
-                            <div
-                              key={request.id}
-                              className="flex items-center gap-3 rounded-2xl bg-[#1f2026] p-3"
-                            >
-                              <Avatar
-                                username={profile.username}
-                                avatarUrl={profile.avatar_url}
-                                size="sm"
-                              />
-
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-black">
-                                  {profile.username}
-                                </p>
-                                <p className="text-xs text-gray-400">
-                                  Arkadaşlık isteği gönderdi
-                                </p>
-                              </div>
-
-                              <button
-                                onClick={() => acceptFriendRequest(request.id)}
-                                className="rounded-xl bg-green-600 px-3 py-2 text-xs font-black hover:bg-green-700"
-                              >
-                                Kabul
-                              </button>
-
-                              <button
-                                onClick={() => rejectFriendRequest(request.id)}
-                                className="rounded-xl bg-red-600 px-3 py-2 text-xs font-black hover:bg-red-700"
-                              >
-                                Reddet
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-[#232428] p-3">
-                  <p className="mb-3 text-xs font-black text-gray-400">
-                    ARKADAŞ LİSTESİ
-                  </p>
-
-                  {friendProfiles.length === 0 ? (
-                    <p className="rounded-xl bg-[#1f2026] p-3 text-sm text-gray-400">
-                      Henüz arkadaşın yok.
-                    </p>
-                  ) : (
-                    <div className="zenco-scroll max-h-[420px] space-y-2 overflow-y-auto pr-1">
-                      {friendProfiles.map(({ friend, profile }) => {
-                        if (!profile) return null;
-
-                        const statusInfo = getProfileStatusInfo(profile);
-
-                        return (
-                          <div
-                            key={friend.id}
-                            className="flex items-center gap-3 rounded-2xl bg-[#1f2026] p-3 hover:bg-[#2b2d31] transition"
-                          >
-                            <button onClick={() => setSelectedProfile(profile)}>
-                              <Avatar
-                                username={profile.username}
-                                avatarUrl={profile.avatar_url}
-                                size="sm"
-                              />
-                            </button>
-
-                            <button
-                              onClick={() => setSelectedProfile(profile)}
-                              className="min-w-0 flex-1 text-left"
-                            >
-                              <p className="truncate text-sm font-black">
-                                {profile.username}
-                              </p>
-                              <p className={`text-xs font-bold ${statusInfo.textClass}`}>
-                                {statusInfo.icon} {statusInfo.label}
-                              </p>
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                showToast("DM sistemi bir sonraki adımda açılacak.", "info");
-                              }}
-                              className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black hover:bg-indigo-700 transition"
-                            >
-                              DM
-                            </button>
-
-                            <button
-                              onClick={() => removeFriend(friend.id)}
-                              className="rounded-xl bg-[#383a40] px-3 py-2 text-xs font-black hover:bg-red-600 transition"
-                            >
-                              Kaldır
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
 
           {pinnedPanelOpen && (
             <div className="absolute left-4 right-4 top-16 z-50 rounded-3xl border border-yellow-400/20 bg-[#1f2026]/95 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl animate-[fadeIn_0.15s_ease-out]">
@@ -2671,6 +2960,8 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
               </button>
             </div>
           </div>
+            </>
+          )}
         </section>
 
         {selectedProfile && (
