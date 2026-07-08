@@ -1485,14 +1485,26 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
             <div className="ml-auto flex items-center gap-2">
               <button
                 onClick={() => setPinnedPanelOpen((prev) => !prev)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                  pinnedMessages.length > 0
-                    ? "bg-yellow-500/15 text-yellow-200 hover:bg-yellow-500/25"
-                    : "bg-[#404249] text-gray-300 hover:bg-[#50535a]"
+                className={`group flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-xs font-black transition-all duration-200 hover:scale-[1.03] active:scale-95 ${
+                  pinnedPanelOpen
+                    ? "border-yellow-300/60 bg-gradient-to-r from-yellow-500/30 to-amber-500/15 text-yellow-50 shadow-lg shadow-yellow-900/20"
+                    : pinnedMessages.length > 0
+                    ? "border-yellow-400/35 bg-gradient-to-r from-yellow-500/20 to-amber-500/10 text-yellow-100 shadow-md shadow-yellow-900/10 hover:border-yellow-300/60 hover:from-yellow-500/30"
+                    : "border-white/10 bg-[#404249] text-gray-300 hover:bg-[#50535a]"
                 }`}
                 title="Sabitlenen mesajlar"
               >
-                📌 Sabitler {pinnedMessages.length > 0 ? `(${pinnedMessages.length})` : ""}
+                <span className="flex h-6 w-6 items-center justify-center rounded-xl bg-yellow-500/20 transition group-hover:rotate-[-12deg]">
+                  📌
+                </span>
+
+                <span>Sabitler</span>
+
+                {pinnedMessages.length > 0 && (
+                  <span className="rounded-full bg-black/25 px-2 py-0.5 text-[11px] text-yellow-50">
+                    {pinnedMessages.length}
+                  </span>
+                )}
               </button>
 
               <button
