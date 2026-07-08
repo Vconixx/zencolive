@@ -1775,6 +1775,11 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           }}
           onCreateServer={() => setServerActionOpen(true)}
           onOpenSettings={() => router.push("/settings")}
+          onOpenFriends={() => {
+            setFriendsPanelOpen(true);
+            setPinnedPanelOpen(false);
+          }}
+          friendsActive={friendsPanelOpen}
         />
 
         <ChannelSidebar
@@ -1939,7 +1944,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           </header>
 
           {friendsPanelOpen && (
-            <div className="absolute left-4 right-4 top-16 z-50 rounded-3xl border border-indigo-400/20 bg-[#1f2026]/95 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl animate-[fadeIn_0.15s_ease-out]">
+            <div className="absolute inset-4 top-16 z-50 rounded-[32px] border border-indigo-400/20 bg-[#1f2026]/98 p-5 shadow-2xl shadow-black/50 backdrop-blur-xl animate-[fadeIn_0.15s_ease-out] overflow-hidden">
               <div className="mb-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-500/15 text-xl shadow-lg shadow-indigo-900/10">
@@ -1947,11 +1952,11 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                   </span>
 
                   <div>
-                    <p className="text-base font-black text-indigo-100">
-                      Direkt Mesajlar / Arkadaşlar
+                    <p className="text-xl font-black text-indigo-100">
+                      Arkadaşlar
                     </p>
                     <p className="text-xs text-gray-400">
-                      Discord gibi arkadaş isteği, liste ve DM altyapısı
+                      Buradan arkadaşlarını yönet, istekleri kabul et ve DM başlat.
                     </p>
                   </div>
                 </div>
@@ -2153,6 +2158,15 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                               <p className={`text-xs font-bold ${statusInfo.textClass}`}>
                                 {statusInfo.icon} {statusInfo.label}
                               </p>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                showToast("DM sistemi bir sonraki adımda açılacak.", "info");
+                              }}
+                              className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black hover:bg-indigo-700 transition"
+                            >
+                              DM
                             </button>
 
                             <button

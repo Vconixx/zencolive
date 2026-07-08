@@ -13,6 +13,8 @@ type ServerSidebarProps = {
   onSelectServer: (serverId: string) => void;
   onCreateServer: () => void;
   onOpenSettings: () => void;
+  onOpenFriends?: () => void;
+  friendsActive?: boolean;
 };
 
 export default function ServerSidebar({
@@ -21,9 +23,24 @@ export default function ServerSidebar({
   onSelectServer,
   onCreateServer,
   onOpenSettings,
+  onOpenFriends,
+  friendsActive = false,
 }: ServerSidebarProps) {
   return (
     <aside className="w-20 bg-[#1e1f22] flex flex-col items-center py-4 gap-3 border-r border-black/20">
+      <button
+        onClick={onOpenFriends}
+        title="Arkadaşlar / Direkt Mesajlar"
+        className={`group relative w-12 h-12 flex items-center justify-center text-xl transition-all duration-200 overflow-hidden ${
+          friendsActive
+            ? "rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-900/40"
+            : "rounded-full bg-[#313338] hover:rounded-2xl hover:bg-indigo-600 hover:scale-105"
+        }`}
+      >
+        <span className="transition group-hover:scale-110">👥</span>
+      </button>
+
+      <div className="w-10 h-[2px] bg-[#313338] rounded-full my-1" />
       {servers.length > 0 ? (
         servers.map((server) => {
           const isActive = server.id === activeServerId;

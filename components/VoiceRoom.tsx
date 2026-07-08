@@ -76,6 +76,8 @@ export default function VoiceRoom({
   const [voiceInfo, setVoiceInfo] = useState<Record<string, VoiceInfo>>({});
   const [screenOwner, setScreenOwner] = useState("");
   const [streamOpen, setStreamOpen] = useState(false);
+  const [voiceVolume, setVoiceVolume] = useState(100);
+  const [streamVolume, setStreamVolume] = useState(100);
 
   const [localScreenTrack, setLocalScreenTrack] = useState<LocalTrack | null>(
     null
@@ -156,12 +158,24 @@ export default function VoiceRoom({
     };
   }, [remoteScreenTrack, streamOpen]);
 
+  useEffect(() => {
+    audioElementsRef.current.forEach((element) => {
+      element.volume = voiceVolume / 100;
+    });
+  }, [voiceVolume]);
+
+  useEffect(() => {
+    if (remoteScreenVideoRef.current) {
+      remoteScreenVideoRef.current.volume = streamVolume / 100;
+    }
+  }, [streamVolume, remoteScreenTrack, streamOpen]);
+
   function playRemoteAudio(track: RemoteTrack) {
     if (track.kind !== Track.Kind.Audio) return;
 
     const audioElement = track.attach() as HTMLAudioElement;
     audioElement.autoplay = true;
-    audioElement.volume = 1;
+    audioElement.volume = voiceVolume / 100;
     audioElement.style.display = "none";
 
     document.body.appendChild(audioElement);
@@ -503,6 +517,38 @@ export default function VoiceRoom({
               📞
             </button>
           </div>
+
+          <div className="mt-3 space-y-3 rounded-xl bg-[#1b1c20] p-3 border border-white/10">
+            <div>
+              <div className="mb-1 flex items-center justify-between text-[11px] font-bold text-gray-400">
+                <span>🎧 Kullanıcı Sesleri</span>
+                <span>{voiceVolume}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="150"
+                value={voiceVolume}
+                onChange={(e) => setVoiceVolume(Number(e.target.value))}
+                className="w-full accent-indigo-500"
+              />
+            </div>
+
+            <div>
+              <div className="mb-1 flex items-center justify-between text-[11px] font-bold text-gray-400">
+                <span>🖥️ Yayın Sesi</span>
+                <span>{streamVolume}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="150"
+                value={streamVolume}
+                onChange={(e) => setStreamVolume(Number(e.target.value))}
+                className="w-full accent-purple-500"
+              />
+            </div>
+          </div>
         </div>
       )}
 
@@ -563,6 +609,9 @@ export default function VoiceRoom({
                 ref={remoteScreenVideoRef}
                 autoPlay
                 playsInline
+                onLoadedMetadata={(e) => {
+                  e.currentTarget.volume = streamVolume / 100;
+                }}
                 className="w-full bg-black aspect-video"
               />
             )}
