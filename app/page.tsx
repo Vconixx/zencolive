@@ -1560,17 +1560,19 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                                 block: "center",
                               });
                             }}
-                            className="mb-2 flex max-w-xl items-center gap-2 rounded-xl border-l-4 border-indigo-500 bg-[#232428]/80 px-3 py-2 text-left hover:bg-[#2b2d31] transition"
+                            className="mb-2 flex max-w-lg items-center gap-3 rounded-2xl border border-indigo-500/25 bg-gradient-to-r from-indigo-600/15 to-[#232428]/95 px-3 py-2 text-left shadow-lg shadow-black/10 hover:border-indigo-400/60 hover:bg-[#2b2d31] transition-all duration-200 hover:translate-x-1"
                           >
-                            <span className="text-indigo-300">↩</span>
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-600/25 text-indigo-200">
+                              ↩
+                            </span>
 
                             <div className="min-w-0">
-                              <p className="text-xs font-bold text-indigo-300">
+                              <p className="text-xs font-black text-indigo-200">
                                 {getProfileForMessage(getMessageById(msg.reply_to_id)!)?.username ||
                                   getMessageById(msg.reply_to_id)?.username ||
-                                  "Kullanıcı"} kişisine cevap
+                                  "Kullanıcı"} kişisine yanıt
                               </p>
-                              <p className="truncate text-xs text-gray-400">
+                              <p className="mt-0.5 truncate text-xs text-gray-300">
                                 {getShortContent(getMessageById(msg.reply_to_id)?.content || "")}
                               </p>
                             </div>
@@ -1711,19 +1713,25 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
           <div className="p-5 bg-[#313338]/95 backdrop-blur border-t border-[#1e1f22]">
             {replyToMessage && (
-              <div className="mb-3 flex items-center justify-between rounded-2xl border border-indigo-500/30 bg-[#232428] px-4 py-3 shadow-lg shadow-black/10">
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-indigo-300">
-                    {replyToMessage.username} kullanıcısına cevap veriyorsun
-                  </p>
-                  <p className="truncate text-sm text-gray-300">
-                    {getShortContent(replyToMessage.content)}
-                  </p>
+              <div className="mb-3 flex items-center justify-between rounded-2xl border border-indigo-500/30 bg-gradient-to-r from-indigo-600/15 to-[#232428] px-4 py-3 shadow-lg shadow-black/10">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600/25 text-indigo-200">
+                    ↩
+                  </span>
+
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-indigo-200">
+                      {replyToMessage.username} kullanıcısına yanıt veriyorsun
+                    </p>
+                    <p className="truncate text-sm text-gray-300">
+                      {getShortContent(replyToMessage.content)}
+                    </p>
+                  </div>
                 </div>
 
                 <button
                   onClick={() => setReplyToMessage(null)}
-                  className="ml-3 h-8 w-8 rounded-full bg-[#383a40] hover:bg-red-600 font-black transition"
+                  className="ml-3 h-9 w-9 rounded-full bg-[#383a40] hover:bg-red-600 font-black transition hover:scale-105"
                   title="Cevabı iptal et"
                 >
                   ✕
