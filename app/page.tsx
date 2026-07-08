@@ -925,6 +925,10 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+
+    setTimeout(() => {
+      getMessages();
+    }, 250);
   }
 
   function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
@@ -962,6 +966,10 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
     setContent("");
     setReplyToMessage(null);
+
+    setTimeout(() => {
+      getMessages();
+    }, 250);
   }
 
   async function deleteMessage(msg: Message) {
@@ -1071,7 +1079,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     getProfiles();
 
     const channel = supabase
-      .channel("messages-channel")
+      .channel(`messages-channel-${activeServerId}-${activeChannelId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "messages" },
@@ -1086,10 +1094,17 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
               const ownMessage = newMessage.user_id === currentUserId;
               const shouldScroll = isNearBottomRef.current || ownMessage;
 
-              setMessages((prev) => [...prev, newMessage]);
+              setMessages((prev) => {
+                const alreadyExists = prev.some((msg) => msg.id === newMessage.id);
+
+                if (alreadyExists) return prev;
+
+                return [...prev, newMessage];
+              });
 
               if (shouldScroll) {
                 scrollToBottom("smooth");
+                setTimeout(() => scrollToBottom("smooth"), 250);
               } else {
                 setUnreadCount((prev) => prev + 1);
               }
