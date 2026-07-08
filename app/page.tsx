@@ -24,6 +24,7 @@ type Message = {
   channel_id: string | null;
   server_id: string | null;
   channel_uuid: string | null;
+  reply_to_id: number | null;
 };
 
 type Profile = {
@@ -229,6 +230,7 @@ export default function Home() {
   const [content, setContent] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState("");
+  const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [toast, setToast] = useState("");
@@ -441,16 +443,18 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   async function toggleReaction(messageId: number, emoji: string) {
     if (!currentUserId) return;
 
-    const myCurrentReaction = messageReactions.find(
+    const existingReaction = messageReactions.find(
       (reaction) =>
-        reaction.message_id === messageId && reaction.user_id === currentUserId
+        reaction.message_id === messageId &&
+        reaction.user_id === currentUserId &&
+        reaction.emoji === emoji
     );
 
-    if (myCurrentReaction?.emoji === emoji) {
+    if (existingReaction) {
       const { error } = await supabase
         .from("message_reactions")
         .delete()
-        .eq("id", myCurrentReaction.id);
+        .eq("id", existingReaction.id);
 
       if (error) {
         showToast("Reaksiyon kaldırılamadı: " + error.message, "error");
@@ -458,26 +462,10 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       }
 
       setMessageReactions((prev) =>
-        prev.filter((reaction) => reaction.id !== myCurrentReaction.id)
+        prev.filter((reaction) => reaction.id !== existingReaction.id)
       );
 
       return;
-    }
-
-    if (myCurrentReaction) {
-      const { error: deleteError } = await supabase
-        .from("message_reactions")
-        .delete()
-        .eq("id", myCurrentReaction.id);
-
-      if (deleteError) {
-        showToast("Eski reaksiyon kaldırılamadı: " + deleteError.message, "error");
-        return;
-      }
-
-      setMessageReactions((prev) =>
-        prev.filter((reaction) => reaction.id !== myCurrentReaction.id)
-      );
     }
 
     const { data, error } = await supabase
@@ -502,15 +490,11 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
     if (data) {
       setMessageReactions((prev) => {
-        const withoutMyOldReaction = prev.filter(
-          (reaction) =>
-            !(
-              reaction.message_id === messageId &&
-              reaction.user_id === currentUserId
-            )
-        );
+        const alreadyExists = prev.some((reaction) => reaction.id === data.id);
 
-        return [...withoutMyOldReaction, data];
+        if (alreadyExists) return prev;
+
+        return [...prev, data];
       });
     }
   }
@@ -540,7 +524,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           </div>
         )}
 
-        <div className="zenco-reaction-picker pointer-events-none absolute -top-9 left-[520px] z-30 opacity-0 translate-y-1 group-hover:pointer-events-auto group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200">
+        <div className="pointer-events-none absolute -top-10 left-0 z-20 opacity-0 translate-y-1 group-hover:pointer-events-auto group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200">
           <div className="flex items-center gap-1 rounded-full bg-[#1f2026] border border-[#404249] px-2 py-1 shadow-xl">
             {reactionEmojis.map((emoji) => (
               <button
@@ -562,6 +546,29 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     if (msg.user_id) return profiles.find((p) => p.id === msg.user_id) || null;
     return profiles.find((p) => p.username === msg.username) || null;
   }
+
+  function getMessageById(messageId: number | null) {
+    if (!messageId) return null;
+    return messages.find((message) => message.id === messageId) || null;
+  }
+
+  function getShortContent(text: string) {
+    if (isOnlyImageMessage(text)) return "📷 Resim";
+    return text.length > 80 ? text.slice(0, 80) + "..." : text;
+  }
+
+  function startReply(msg: Message) {
+    setReplyToMessage(msg);
+
+    setTimeout(() => {
+      const input = document.querySelector<HTMLInputElement>(
+        'input[placeholder*="kanalına mesaj gönder"]'
+      );
+      input?.focus();
+    }, 50);
+  }
+
+
 
   async function checkUser() {
     const { data } = await supabase.auth.getUser();
@@ -846,7 +853,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     const { data, error } = await supabase
       .from("messages")
       .select(
-        "id, username, content, created_at, edited_at, user_id, channel_id, server_id, channel_uuid"
+        "id, username, content, created_at, edited_at, user_id, channel_id, server_id, channel_uuid, reply_to_id"
       )
       .eq("server_id", activeServerId)
       .eq("channel_uuid", activeChannelId)
@@ -856,6 +863,8 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       setMessages(data);
       await getReactions(data.map((message) => message.id));
       scrollToBottom("auto");
+      setTimeout(() => scrollToBottom("auto"), 400);
+      setTimeout(() => scrollToBottom("auto"), 1200);
     }
   }
 
@@ -902,6 +911,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       channel_uuid: activeChannelId,
       channel_id: activeChannelName,
       content: publicUrl,
+      reply_to_id: replyToMessage?.id || null,
     });
 
     if (messageError) {
@@ -910,6 +920,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     }
 
     showToast("Resim gönderildi.", "success");
+    setReplyToMessage(null);
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -941,6 +952,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       channel_uuid: activeChannelId,
       channel_id: activeChannelName,
       content,
+      reply_to_id: replyToMessage?.id || null,
     });
 
     if (error) {
@@ -949,6 +961,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     }
 
     setContent("");
+    setReplyToMessage(null);
   }
 
   async function deleteMessage(msg: Message) {
@@ -1042,6 +1055,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       getChannels(activeServerId);
       setEditingId(null);
       setContent("");
+      setReplyToMessage(null);
       setMessages([]);
       setMessageReactions([]);
     }
@@ -1166,6 +1180,11 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       };
 
       twitterWindow.twttr?.widgets?.load();
+
+      if (isNearBottomRef.current) {
+        setTimeout(() => scrollToBottom("auto"), 500);
+        setTimeout(() => scrollToBottom("auto"), 1400);
+      }
     }
 
     if (existingScript) {
@@ -1227,12 +1246,6 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           max-width: 330px !important;
           width: 330px !important;
           margin: 0 !important;
-        }
-
-        @media (max-width: 1100px) {
-          .zenco-reaction-picker {
-            left: 320px !important;
-          }
         }
       `}</style>
 
@@ -1354,6 +1367,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     setActiveChannelId(channelId);
     setEditingId(null);
     setContent("");
+    setReplyToMessage(null);
     setUnreadCount(0);
     isNearBottomRef.current = true;
   }}
@@ -1389,8 +1403,9 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
               return (
                 <div
+                  id={`message-${msg.id}`}
                   key={msg.id}
-                  className="group relative flex gap-4 rounded-xl px-3 py-1.5 transition-all duration-200 hover:bg-[#2b2d31]"
+                  className="group relative flex gap-4 rounded-xl px-3 py-1.5 transition-all duration-200 hover:bg-[#2b2d31] scroll-mt-20"
                 >
                   <div onClick={() => profile && setSelectedProfile(profile)}>
                     <Avatar username={displayName} avatarUrl={displayAvatar} />
@@ -1410,27 +1425,32 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                         {msg.edited_at && " · düzenlendi"}
                       </span>
 
-                      {(canEdit || canDelete) && (
-                        <div className="opacity-0 group-hover:opacity-100 flex gap-2 ml-2 transition-opacity duration-200">
-                          {canEdit && (
-                            <button
-                              onClick={() => startEdit(msg)}
-                              className="text-xs text-blue-400 hover:underline"
-                            >
-                              Düzenle
-                            </button>
-                          )}
+                      <div className="opacity-0 group-hover:opacity-100 flex gap-2 ml-2 transition-opacity duration-200">
+                        <button
+                          onClick={() => startReply(msg)}
+                          className="text-xs text-indigo-300 hover:underline"
+                        >
+                          Cevapla
+                        </button>
 
-                          {canDelete && (
-                            <button
-                              onClick={() => deleteMessage(msg)}
-                              className="text-xs text-red-400 hover:underline"
-                            >
-                              Sil
-                            </button>
-                          )}
-                        </div>
-                      )}
+                        {canEdit && (
+                          <button
+                            onClick={() => startEdit(msg)}
+                            className="text-xs text-blue-400 hover:underline"
+                          >
+                            Düzenle
+                          </button>
+                        )}
+
+                        {canDelete && (
+                          <button
+                            onClick={() => deleteMessage(msg)}
+                            className="text-xs text-red-400 hover:underline"
+                          >
+                            Sil
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {editingId === msg.id ? (
@@ -1464,6 +1484,35 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                       </div>
                     ) : (
                       <div>
+                        {msg.reply_to_id && getMessageById(msg.reply_to_id) && (
+                          <button
+                            onClick={() => {
+                              const repliedElement = document.getElementById(
+                                `message-${msg.reply_to_id}`
+                              );
+
+                              repliedElement?.scrollIntoView({
+                                behavior: "smooth",
+                                block: "center",
+                              });
+                            }}
+                            className="mb-2 flex max-w-xl items-center gap-2 rounded-xl border-l-4 border-indigo-500 bg-[#232428]/80 px-3 py-2 text-left hover:bg-[#2b2d31] transition"
+                          >
+                            <span className="text-indigo-300">↩</span>
+
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-indigo-300">
+                                {getProfileForMessage(getMessageById(msg.reply_to_id)!)?.username ||
+                                  getMessageById(msg.reply_to_id)?.username ||
+                                  "Kullanıcı"} kişisine cevap
+                              </p>
+                              <p className="truncate text-xs text-gray-400">
+                                {getShortContent(getMessageById(msg.reply_to_id)?.content || "")}
+                              </p>
+                            </div>
+                          </button>
+                        )}
+
                         {!isOnlyImageMessage(msg.content) && (
                           <p className="text-gray-300 leading-relaxed break-words">
                             {linkifyText(msg.content)}
@@ -1597,6 +1646,27 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           )}
 
           <div className="p-5 bg-[#313338]/95 backdrop-blur border-t border-[#1e1f22]">
+            {replyToMessage && (
+              <div className="mb-3 flex items-center justify-between rounded-2xl border border-indigo-500/30 bg-[#232428] px-4 py-3 shadow-lg shadow-black/10">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-indigo-300">
+                    {replyToMessage.username} kullanıcısına cevap veriyorsun
+                  </p>
+                  <p className="truncate text-sm text-gray-300">
+                    {getShortContent(replyToMessage.content)}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setReplyToMessage(null)}
+                  className="ml-3 h-8 w-8 rounded-full bg-[#383a40] hover:bg-red-600 font-black transition"
+                  title="Cevabı iptal et"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
             <input
               ref={fileInputRef}
               type="file"
