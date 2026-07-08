@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import VoiceRoom from "./VoiceRoom";
-import ServerMenu from "./ServerMenu";
+import { useEffect, useRef, useState } from "react";
+import { supabase } from "../lib/supabase";
 
 type Server = {
   id: string;
@@ -26,6 +26,9 @@ type Props = {
   username: string;
   avatarUrl: string | null;
   currentRole: string;
+  currentStatus?: string;
+  currentAbout?: string;
+  currentProfileColor?: string;
   canManageChannels: boolean;
   onCreateTextChannel: () => void;
   onCreateVoiceChannel: () => void;
@@ -41,25 +44,43 @@ type Props = {
   onLogout: () => void;
 };
 
+const statusOptions = [
+  { value: "online", label: "Çevrimiçi", icon: "🟢", color: "text-green-400" },
+  { value: "idle", label: "Boşta", icon: "🌙", color: "text-yellow-300" },
+  { value: "dnd", label: "Rahatsız Etmeyin", icon: "⛔", color: "text-red-300" },
+  { value: "invisible", label: "Görünmez", icon: "⚫", color: "text-gray-300" },
+];
+
+function getStatusInfo(status?: string) {
+  return statusOptions.find((item) => item.value === status) || statusOptions[0];
+}
+
 function MiniAvatar({
   username,
   avatarUrl,
+  profileColor,
 }: {
   username: string;
   avatarUrl: string | null;
+  profileColor?: string;
 }) {
   if (avatarUrl) {
     return (
       <img
         src={avatarUrl}
         alt={username}
-        className="w-10 h-10 rounded-full object-cover bg-indigo-600 ring-2 ring-indigo-500/40"
+        className="w-11 h-11 rounded-full object-cover bg-indigo-600 ring-2 ring-indigo-500/40"
       />
     );
   }
 
   return (
-    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-700 flex items-center justify-center font-bold ring-2 ring-indigo-500/40">
+    <div
+      className="w-11 h-11 rounded-full flex items-center justify-center font-black ring-2 ring-indigo-500/40"
+      style={{
+        background: `linear-gradient(135deg, ${profileColor || "#6366f1"}, #8b5cf6)`,
+      }}
+    >
       {username[0]?.toUpperCase() || "Z"}
     </div>
   );
@@ -73,6 +94,8 @@ export default function ChannelSidebar({
   username,
   avatarUrl,
   currentRole,
+  currentStatus = "online",
+  currentProfileColor = "#6366f1",
   canManageChannels,
   onCreateTextChannel,
   onCreateVoiceChannel,
@@ -87,43 +110,120 @@ export default function ChannelSidebar({
   onDeleteServer,
   onLogout,
 }: Props) {
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [serverMenuOpen, setServerMenuOpen] = useState(false);
+  const [localStatus, setLocalStatus] = useState(currentStatus);
+  const serverMenuRef = useRef<HTMLDivElement>(null);
+
+  const statusInfo = getStatusInfo(localStatus || currentStatus);
+
+  useEffect(() => {
+    setLocalStatus(currentStatus || "online");
+  }, [currentStatus]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        serverMenuRef.current &&
+        !serverMenuRef.current.contains(e.target as Node)
+      ) {
+        setServerMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  async function updateStatus(status: string) {
+    setLocalStatus(status);
+    setStatusMenuOpen(false);
+
+    const { data } = await supabase.auth.getUser();
+
+    if (!data.user) return;
+
+    await supabase
+      .from("profiles")
+      .update({ status })
+      .eq("id", data.user.id);
+  }
 
   return (
     <aside className="w-64 bg-[#2b2d31] p-4 flex flex-col border-r border-black/30 shadow-xl">
-      <div className="relative border-b border-[#1e1f22] pb-4">
+      <div ref={serverMenuRef} className="relative">
         <button
-  onClick={() => setServerMenuOpen((prev) => !prev)}
-  className="w-full px-3 py-3 rounded-xl bg-[#232428] hover:bg-[#363940] text-left text-lg font-bold transition flex items-center justify-between gap-2 border border-[#3b3d44]"
->
-          <span className="truncate">{activeServer?.name || "ZencoLive"}</span>
-          <span className="text-sm text-gray-400">⌄</span>
+          onClick={() => setServerMenuOpen((prev) => !prev)}
+          className="w-full rounded-2xl border border-white/10 bg-[#232428] px-4 py-3 text-left shadow-lg hover:border-indigo-500/40 transition"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <p className="truncate text-lg font-black">
+              {activeServer?.name || "ZencoLive"}
+            </p>
+            <span className="text-xs text-gray-400">{serverMenuOpen ? "▲" : "▼"}</span>
+          </div>
         </button>
 
-        <ServerMenu
-          open={serverMenuOpen}
-          isOwner={isOwner}
-          inviteCode={inviteCode}
-          onCopyInvite={() => {
-            setServerMenuOpen(false);
-            onCopyInvite();
-          }}
-          onRegenerateInvite={() => {
-            setServerMenuOpen(false);
-            onRegenerateInvite();
-          }}
-          onLeaveServer={() => {
-            setServerMenuOpen(false);
-            onLeaveServer();
-          }}
-          onDeleteServer={() => {
-            setServerMenuOpen(false);
-            onDeleteServer();
-          }}
-        />
+        {serverMenuOpen && (
+          <div className="absolute left-0 right-0 top-[58px] z-50 overflow-hidden rounded-2xl border border-white/10 bg-[#111214] shadow-2xl animate-[fadeIn_0.15s_ease-out]">
+            <div className="p-2">
+              {inviteCode && (
+                <button
+                  onClick={() => {
+                    onCopyInvite();
+                    setServerMenuOpen(false);
+                  }}
+                  className="w-full rounded-xl px-3 py-3 text-left hover:bg-[#2b2d31] transition"
+                >
+                  <p className="text-sm font-black text-white">📋 Davet Kodunu Kopyala</p>
+                  <p className="mt-1 text-xs font-bold text-gray-500">{inviteCode}</p>
+                </button>
+              )}
+
+              {isOwner && (
+                <button
+                  onClick={() => {
+                    onRegenerateInvite();
+                    setServerMenuOpen(false);
+                  }}
+                  className="w-full rounded-xl px-3 py-3 text-left hover:bg-[#2b2d31] transition"
+                >
+                  <p className="text-sm font-black text-white">🔄 Yeni Davet Kodu Oluştur</p>
+                  <p className="mt-1 text-xs text-gray-500">Eski kod devre dışı kalır.</p>
+                </button>
+              )}
+
+              <div className="my-2 h-px bg-white/10" />
+
+              {!isOwner && (
+                <button
+                  onClick={() => {
+                    onLeaveServer();
+                    setServerMenuOpen(false);
+                  }}
+                  className="w-full rounded-xl px-3 py-3 text-left text-red-300 hover:bg-red-600/15 transition"
+                >
+                  <p className="text-sm font-black">🚪 Sunucudan Ayrıl</p>
+                </button>
+              )}
+
+              {isOwner && (
+                <button
+                  onClick={() => {
+                    onDeleteServer();
+                    setServerMenuOpen(false);
+                  }}
+                  className="w-full rounded-xl px-3 py-3 text-left text-red-300 hover:bg-red-600/15 transition"
+                >
+                  <p className="text-sm font-black">🗑️ Sunucuyu Sil</p>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="mt-5">
+      <div className="mt-5 border-t border-[#1e1f22] pt-4">
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs text-gray-400 font-bold tracking-wide">
             METİN KANALLARI
@@ -196,24 +296,78 @@ export default function ChannelSidebar({
         />
       </div>
 
-      <div className="mt-auto bg-[#232428] p-3 rounded-2xl border border-[#3b3d44] shadow-lg">
-        <div className="flex items-center gap-3">
-          <MiniAvatar username={username} avatarUrl={avatarUrl} />
-
-          <div className="flex-1 overflow-hidden">
-            <p className="font-bold text-sm truncate">{username}</p>
-            <p className="text-xs text-green-400">
-              {currentRole === "admin" ? "Admin" : "Çevrimiçi"}
+      <div className="relative mt-auto rounded-2xl border border-[#3b3d44] bg-[#232428] p-3 shadow-lg">
+        {statusMenuOpen && (
+          <div className="absolute bottom-[92px] left-0 right-0 z-50 rounded-2xl border border-white/10 bg-[#1f2026] p-2 shadow-2xl">
+            <p className="px-3 pb-2 pt-1 text-xs font-black text-gray-400">
+              DURUMUNU DEĞİŞTİR
             </p>
+
+            <div className="space-y-1">
+              {statusOptions.map((item) => (
+                <button
+                  key={item.value}
+                  onClick={() => updateStatus(item.value)}
+                  className={`w-full rounded-xl px-3 py-2 text-left transition hover:bg-[#34363d] ${
+                    (localStatus || currentStatus) === item.value
+                      ? "bg-indigo-600/20"
+                      : ""
+                  }`}
+                >
+                  <span className="mr-2">{item.icon}</span>
+                  <span className={`text-sm font-bold ${item.color}`}>
+                    {item.label}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
+        )}
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setStatusMenuOpen((prev) => !prev)}
+            className="relative transition hover:scale-105"
+            title="Durum değiştir"
+          >
+            <MiniAvatar
+              username={username}
+              avatarUrl={avatarUrl}
+              profileColor={currentProfileColor}
+            />
+
+            <span className="absolute -bottom-1 -right-1 rounded-full border-4 border-[#232428] text-xs">
+              {statusInfo.icon}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setStatusMenuOpen((prev) => !prev)}
+            className="min-w-0 flex-1 text-left"
+            title="Durum değiştir"
+          >
+            <p className="truncate text-sm font-black">{username}</p>
+            <p className={`text-xs font-bold ${statusInfo.color}`}>
+              {statusInfo.label}
+            </p>
+          </button>
         </div>
 
-        <button
-          onClick={onLogout}
-          className="mt-3 w-full bg-red-600 hover:bg-red-700 rounded-xl px-3 py-2 text-sm font-bold transition hover:scale-[1.02]"
-        >
-          Çıkış Yap
-        </button>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setStatusMenuOpen((prev) => !prev)}
+            className="rounded-xl bg-[#383a40] px-3 py-2 text-xs font-black hover:bg-indigo-600 transition"
+          >
+            Durum
+          </button>
+
+          <button
+            onClick={onLogout}
+            className="rounded-xl bg-red-600 px-3 py-2 text-xs font-black hover:bg-red-700 transition"
+          >
+            Çıkış Yap
+          </button>
+        </div>
       </div>
     </aside>
   );

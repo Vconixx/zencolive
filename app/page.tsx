@@ -35,6 +35,10 @@ type Profile = {
   avatar_url: string | null;
   banner_url: string | null;
   role: string | null;
+  about: string | null;
+  status: string | null;
+  profile_color: string | null;
+  created_at: string | null;
 };
 
 type Server = {
@@ -213,6 +217,56 @@ function Avatar({
   );
 }
 
+function getStatusInfo(status?: string | null) {
+  if (status === "idle") {
+    return {
+      label: "Boşta",
+      icon: "🌙",
+      dotClass: "bg-yellow-400",
+      textClass: "text-yellow-300",
+    };
+  }
+
+  if (status === "dnd") {
+    return {
+      label: "Rahatsız Etmeyin",
+      icon: "⛔",
+      dotClass: "bg-red-500",
+      textClass: "text-red-300",
+    };
+  }
+
+  if (status === "invisible") {
+    return {
+      label: "Görünmez",
+      icon: "⚫",
+      dotClass: "bg-gray-500",
+      textClass: "text-gray-300",
+    };
+  }
+
+  return {
+    label: "Çevrimiçi",
+    icon: "🟢",
+    dotClass: "bg-green-500",
+    textClass: "text-green-400",
+  };
+}
+
+function getSafeProfileColor(color?: string | null) {
+  return color || "#6366f1";
+}
+
+function formatJoinDate(date?: string | null) {
+  if (!date) return "Bilinmiyor";
+
+  return new Date(date).toLocaleDateString("tr-TR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+}
+
 export default function Home() {
   const router = useRouter();
 
@@ -229,6 +283,9 @@ export default function Home() {
   const [currentRole, setCurrentRole] = useState("user");
   const [username, setUsername] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [currentAbout, setCurrentAbout] = useState("");
+  const [currentStatus, setCurrentStatus] = useState("online");
+  const [currentProfileColor, setCurrentProfileColor] = useState("#6366f1");
   const [content, setContent] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState("");
@@ -623,7 +680,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("id, username, avatar_url, banner_url, role")
+      .select("id, username, avatar_url, banner_url, role, about, status, profile_color, created_at")
       .eq("id", data.user.id)
       .single();
 
@@ -636,6 +693,9 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     setUsername(name);
     setAvatarUrl(profile?.avatar_url || null);
     setCurrentRole(profile?.role || "user");
+    setCurrentAbout(profile?.about || "");
+    setCurrentStatus(profile?.status || "online");
+    setCurrentProfileColor(profile?.profile_color || "#6366f1");
     setLoading(false);
   }
 
@@ -880,9 +940,28 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   async function getProfiles() {
     const { data } = await supabase
       .from("profiles")
-      .select("id, username, avatar_url, banner_url, role");
+      .select("id, username, avatar_url, banner_url, role, about, status, profile_color, created_at");
 
-    if (data) setProfiles(data);
+    if (data) {
+      setProfiles(data);
+
+      const myProfile = data.find((profile) => profile.id === currentUserId);
+
+      if (myProfile) {
+        setUsername(myProfile.username || username);
+        setAvatarUrl(myProfile.avatar_url || null);
+        setCurrentRole(myProfile.role || "user");
+        setCurrentAbout(myProfile.about || "");
+        setCurrentStatus(myProfile.status || "online");
+        setCurrentProfileColor(myProfile.profile_color || "#6366f1");
+      }
+
+      setSelectedProfile((prev) => {
+        if (!prev) return prev;
+
+        return data.find((profile) => profile.id === prev.id) || prev;
+      });
+    }
   }
 
   async function getMessages() {
@@ -1373,6 +1452,9 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   username={username}
   avatarUrl={avatarUrl}
   currentRole={currentRole}
+  currentStatus={currentStatus}
+  currentAbout={currentAbout}
+  currentProfileColor={currentProfileColor}
   canManageChannels={canManageChannels}
   isOwner={activeServer?.owner_id === currentUserId}
   inviteCode={activeServer?.invite_code}
@@ -2012,49 +2094,128 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
         {selectedProfile && (
           <div
             onClick={() => setSelectedProfile(null)}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4"
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-sm bg-[#2b2d31] rounded-2xl overflow-hidden border border-[#404249] shadow-2xl animate-[fadeIn_0.15s_ease-out]"
+              className="w-full max-w-sm bg-[#2b2d31] rounded-3xl overflow-hidden border border-white/10 shadow-2xl animate-[fadeIn_0.15s_ease-out]"
             >
               <div
-                className="h-32 bg-gradient-to-r from-indigo-600 to-purple-700 bg-cover bg-center"
+                className="relative h-36 bg-cover bg-center"
                 style={
                   selectedProfile.banner_url
-                    ? { backgroundImage: `url(${selectedProfile.banner_url})` }
-                    : undefined
+                    ? {
+                        backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,.05), rgba(0,0,0,.55)), url(${selectedProfile.banner_url})`,
+                      }
+                    : {
+                        background: `linear-gradient(135deg, ${getSafeProfileColor(
+                          selectedProfile.profile_color
+                        )}, #111214)`,
+                      }
                 }
-              />
+              >
+                <button
+                  onClick={() => setSelectedProfile(null)}
+                  className="absolute right-4 top-4 h-9 w-9 rounded-full bg-black/35 hover:bg-red-600 font-black backdrop-blur transition"
+                  title="Kapat"
+                >
+                  ✕
+                </button>
+              </div>
 
               <div className="p-5">
-                <div className="-mt-14 mb-4">
-                  <Avatar
-                    username={selectedProfile.username}
-                    avatarUrl={selectedProfile.avatar_url}
-                    size="lg"
-                  />
+                <div className="-mt-16 mb-4 flex items-end justify-between">
+                  <div className="relative">
+                    {selectedProfile.avatar_url ? (
+                      <img
+                        src={selectedProfile.avatar_url}
+                        alt={selectedProfile.username}
+                        className="h-24 w-24 rounded-full object-cover border-8 border-[#2b2d31] bg-indigo-600 shadow-2xl"
+                      />
+                    ) : (
+                      <div
+                        className="h-24 w-24 rounded-full border-8 border-[#2b2d31] flex items-center justify-center text-4xl font-black shadow-2xl"
+                        style={{
+                          background: `linear-gradient(135deg, ${getSafeProfileColor(
+                            selectedProfile.profile_color
+                          )}, #8b5cf6)`,
+                        }}
+                      >
+                        {selectedProfile.username[0]?.toUpperCase() || "Z"}
+                      </div>
+                    )}
+
+                    <span
+                      className={`absolute bottom-2 right-2 h-5 w-5 rounded-full border-4 border-[#2b2d31] ${
+                        getStatusInfo(selectedProfile.status).dotClass
+                      }`}
+                    />
+                  </div>
+
+                  {selectedProfile.role === "admin" && (
+                    <span className="mb-2 rounded-full bg-green-500/15 px-3 py-1 text-xs font-black text-green-300">
+                      Admin
+                    </span>
+                  )}
                 </div>
 
-                <h2 className="text-2xl font-bold">
+                <h2 className="text-2xl font-black">
                   {selectedProfile.username}
                 </h2>
-                <p className="text-sm text-green-400 mt-1">
-                  {selectedProfile.role === "admin" ? "Admin" : "Çevrimiçi"}
+
+                <p
+                  className={`mt-1 text-sm font-bold ${
+                    getStatusInfo(selectedProfile.status).textClass
+                  }`}
+                >
+                  {getStatusInfo(selectedProfile.status).icon}{" "}
+                  {getStatusInfo(selectedProfile.status).label}
                 </p>
 
-                <div className="mt-5 bg-[#232428] rounded-xl p-4">
-                  <p className="text-xs text-gray-400 font-bold mb-1">
-                    ZENCOLIVE PROFİLİ
-                  </p>
-                  <p className="text-sm text-gray-300">
-                    Henüz hakkında bilgisi yok.
-                  </p>
+                <div className="mt-5 space-y-3">
+                  <div className="rounded-2xl bg-[#232428] p-4">
+                    <p className="mb-1 text-xs font-black text-gray-400">
+                      HAKKIMDA
+                    </p>
+                    <p className="text-sm text-gray-300 whitespace-pre-wrap">
+                      {selectedProfile.about?.trim() ||
+                        "Henüz hakkında bilgisi yok."}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl bg-[#232428] p-4">
+                    <p className="mb-1 text-xs font-black text-gray-400">
+                      PROFİL RENGİ
+                    </p>
+
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-5 w-5 rounded-full"
+                        style={{
+                          backgroundColor: getSafeProfileColor(
+                            selectedProfile.profile_color
+                          ),
+                        }}
+                      />
+                      <span className="text-sm text-gray-300">
+                        {getSafeProfileColor(selectedProfile.profile_color)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-[#232428] p-4">
+                    <p className="mb-1 text-xs font-black text-gray-400">
+                      KATILMA TARİHİ
+                    </p>
+                    <p className="text-sm text-gray-300">
+                      {formatJoinDate(selectedProfile.created_at)}
+                    </p>
+                  </div>
                 </div>
 
                 <button
                   onClick={() => setSelectedProfile(null)}
-                  className="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 rounded-xl py-2 font-bold transition-all duration-200 hover:scale-[1.02]"
+                  className="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 rounded-2xl py-3 font-black transition-all duration-200 hover:scale-[1.02]"
                 >
                   Kapat
                 </button>
