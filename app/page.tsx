@@ -2338,22 +2338,57 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
         <section className="relative flex-1 flex flex-col h-screen">
           {appView === "friends" ? (
             <div className="flex h-full flex-col bg-[#313338]">
-              <header className="h-14 border-b border-[#1e1f22] bg-[#313338]/95 px-6 flex items-center shadow-sm">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-600/20 text-lg">
-                    👥
-                  </span>
+              <header className="h-14 border-b border-[#1e1f22] bg-[#313338]/95 px-5 flex items-center shadow-sm">
+                {selectedDmProfileId ? (
+                  (() => {
+                    const headerProfile = profiles.find(
+                      (profile) => profile.id === selectedDmProfileId
+                    );
 
-                  <div>
-                    <h2 className="text-base font-black">Arkadaşlar</h2>
-                    <p className="text-xs text-gray-400">
-                      Arkadaşlarını yönet ve DM başlat
-                    </p>
+                    if (!headerProfile) return null;
+
+                    const headerStatus = getProfileStatusInfo(headerProfile);
+
+                    return (
+                      <div className="flex min-w-0 items-center gap-3">
+                        <Avatar
+                          username={headerProfile.username}
+                          avatarUrl={headerProfile.avatar_url}
+                          size="sm"
+                        />
+
+                        <div className="min-w-0">
+                          <h2 className="truncate text-base font-black">
+                            {headerProfile.username}
+                          </h2>
+                          <p className={`truncate text-xs font-bold ${headerStatus.textClass}`}>
+                            {headerStatus.icon} {headerStatus.label}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-600/20 text-lg">
+                      👥
+                    </span>
+
+                    <div>
+                      <h2 className="text-base font-black">Arkadaşlar</h2>
+                      <p className="text-xs text-gray-400">
+                        Arkadaşlarını yönet ve DM başlat
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )}
               </header>
 
-              <div className="zenco-scroll flex-1 overflow-y-auto p-6">
+              <div
+                className={`zenco-scroll flex-1 overflow-y-auto ${
+                  selectedDmProfileId ? "p-0" : "p-6"
+                }`}
+              >
                 {selectedDmProfileId ? (
                   (() => {
                     const dmProfile = profiles.find(
@@ -2365,24 +2400,39 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                     const statusInfo = getProfileStatusInfo(dmProfile);
 
                     return (
-                      <div className="mx-auto flex h-full max-w-5xl flex-col rounded-[32px] border border-indigo-400/20 bg-[#1f2026] shadow-2xl shadow-black/30 overflow-hidden">
-                        <div
-                          className="h-32 bg-cover bg-center"
-                          style={
-                            dmProfile.banner_url
-                              ? {
-                                  backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,.1), rgba(0,0,0,.75)), url(${dmProfile.banner_url})`,
-                                }
-                              : {
-                                  background: `linear-gradient(135deg, ${getSafeProfileColor(
-                                    dmProfile.profile_color
-                                  )}, #111214)`,
-                                }
-                          }
-                        />
+                      <div className="flex h-full min-h-0 w-full flex-col bg-[#313338] overflow-hidden">
+                        <div className="relative h-44 shrink-0 overflow-hidden border-b border-white/10 bg-[#111214]">
+                          {dmProfile.banner_url ? (
+                            <>
+                              <div
+                                className="absolute inset-0 scale-110 bg-cover bg-center opacity-45 blur-2xl"
+                                style={{
+                                  backgroundImage: `url(${dmProfile.banner_url})`,
+                                }}
+                              />
 
-                        <div className="border-b border-white/10 p-5">
-                          <div className="-mt-14 flex items-end gap-4">
+                              <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-[#313338]" />
+
+                              <img
+                                src={dmProfile.banner_url}
+                                alt={`${dmProfile.username} banner`}
+                                className="relative z-10 h-full w-full object-contain"
+                              />
+                            </>
+                          ) : (
+                            <div
+                              className="absolute inset-0"
+                              style={{
+                                background: `linear-gradient(135deg, ${getSafeProfileColor(
+                                  dmProfile.profile_color
+                                )}, #111214)`,
+                              }}
+                            />
+                          )}
+                        </div>
+
+                        <div className="shrink-0 border-b border-white/10 bg-[#313338] px-6 pb-5">
+                          <div className="-mt-9 relative z-20 flex items-end gap-4">
                             <Avatar
                               username={dmProfile.username}
                               avatarUrl={dmProfile.avatar_url}
@@ -2399,18 +2449,22 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                             </div>
                           </div>
 
-                          <div className="mt-5 rounded-2xl bg-[#232428] p-4">
-                            <p className="mb-1 text-xs font-black text-gray-400">
-                              HAKKIMDA
-                            </p>
-                            <p className="text-sm text-gray-300">
-                              {dmProfile.about?.trim() || "Henüz hakkında bilgisi yok."}
-                            </p>
+                          <div className="mt-4 flex items-start gap-3 rounded-2xl border border-white/5 bg-[#2b2d31] px-4 py-3">
+                            <span className="mt-0.5 text-sm">📝</span>
+
+                            <div className="min-w-0">
+                              <p className="mb-0.5 text-[10px] font-black tracking-wide text-gray-500">
+                                HAKKIMDA
+                              </p>
+                              <p className="break-words text-sm text-gray-300">
+                                {dmProfile.about?.trim() || "Henüz hakkında bilgisi yok."}
+                              </p>
+                            </div>
                           </div>
                         </div>
 
                         <div className="relative flex min-h-0 flex-1 flex-col">
-                          <div className="zenco-scroll flex-1 overflow-y-auto px-5 py-5">
+                          <div className="zenco-scroll flex-1 overflow-y-auto px-6 py-5">
                             {dmLoading && dmMessages.length === 0 ? (
                               <div className="flex h-full items-center justify-center">
                                 <div className="rounded-2xl border border-white/10 bg-[#232428] px-5 py-4 text-sm font-bold text-gray-300 shadow-xl">
@@ -2432,7 +2486,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                                 </div>
                               </div>
                             ) : (
-                              <div className="space-y-2">
+                              <div className="mx-auto w-full max-w-[1100px] space-y-2">
                                 {dmMessages.map((dmMessage) => {
                                   const isMine = dmMessage.sender_id === currentUserId;
                                   const senderProfile = isMine
@@ -2492,8 +2546,8 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                             )}
                           </div>
 
-                          <div className="border-t border-white/10 bg-[#1b1c20]/95 p-4 backdrop-blur-xl">
-                            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#383a40] p-2 shadow-xl focus-within:border-indigo-500/70 focus-within:ring-2 focus-within:ring-indigo-500/10">
+                          <div className="shrink-0 border-t border-white/10 bg-[#2b2d31]/95 px-5 py-4 backdrop-blur-xl">
+                            <div className="mx-auto flex w-full max-w-[1100px] items-center gap-3 rounded-2xl border border-white/10 bg-[#383a40] p-2 shadow-xl focus-within:border-indigo-500/70 focus-within:ring-2 focus-within:ring-indigo-500/10">
                               <button
                                 onClick={() =>
                                   showToast("DM dosya gönderme sonraki adımda eklenecek.", "info")
