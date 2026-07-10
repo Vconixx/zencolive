@@ -2401,23 +2401,16 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
                     return (
                       <div className="flex h-full min-h-0 w-full flex-col bg-[#313338] overflow-hidden">
-                        <div className="relative h-44 shrink-0 overflow-hidden border-b border-white/10 bg-[#111214]">
+                        <div className="relative h-52 shrink-0 overflow-hidden border-b border-white/10 bg-[#111214]">
                           {dmProfile.banner_url ? (
                             <>
-                              <div
-                                className="absolute inset-0 scale-110 bg-cover bg-center opacity-45 blur-2xl"
-                                style={{
-                                  backgroundImage: `url(${dmProfile.banner_url})`,
-                                }}
-                              />
-
-                              <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-[#313338]" />
-
                               <img
                                 src={dmProfile.banner_url}
                                 alt={`${dmProfile.username} banner`}
-                                className="relative z-10 h-full w-full object-contain"
+                                className="absolute inset-0 h-full w-full object-cover object-center"
                               />
+
+                              <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-black/10 to-[#313338]/85" />
                             </>
                           ) : (
                             <div
