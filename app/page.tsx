@@ -79,6 +79,13 @@ type DmRoom = {
   user2_id: string;
   created_at: string;
   last_message_at: string;
+  user1_last_read_at: string | null;
+  user2_last_read_at: string | null;
+};
+
+type DmRoomSummary = {
+  lastMessage: DmMessage | null;
+  unreadCount: number;
 };
 
 type DmMessage = {
@@ -369,6 +376,7 @@ export default function Home() {
   const [selectedDmProfileId, setSelectedDmProfileId] = useState<string | null>(null);
   const [activeDmRoomId, setActiveDmRoomId] = useState<string | null>(null);
   const [dmRooms, setDmRooms] = useState<DmRoom[]>([]);
+  const [dmRoomSummaries, setDmRoomSummaries] = useState<Record<string, DmRoomSummary>>({});
   const [dmMessages, setDmMessages] = useState<DmMessage[]>([]);
   const [dmContent, setDmContent] = useState("");
   const [dmLoading, setDmLoading] = useState(false);
@@ -495,6 +503,30 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
         "tr"
       );
     });
+
+  const dmListItems = dmRooms
+    .map((room) => {
+      const otherUserId =
+        room.user1_id === currentUserId ? room.user2_id : room.user1_id;
+
+      const profile = profiles.find((item) => item.id === otherUserId) || null;
+      const summary = dmRoomSummaries[room.id] || {
+        lastMessage: null,
+        unreadCount: 0,
+      };
+
+      return {
+        room,
+        profile,
+        summary,
+      };
+    })
+    .filter((item) => item.profile);
+
+  const totalDmUnreadCount = dmListItems.reduce(
+    (total, item) => total + item.summary.unreadCount,
+    0
+  );
 
   const canManageChannels =
     !!activeServer && activeServer.owner_id === currentUserId;
@@ -1213,6 +1245,57 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     });
   }
 
+  function getDmRoomReadAt(room: DmRoom) {
+    return room.user1_id === currentUserId
+      ? room.user1_last_read_at
+      : room.user2_last_read_at;
+  }
+
+  function getDmRoomForProfile(profileId: string) {
+    return dmRooms.find(
+      (room) =>
+        (room.user1_id === currentUserId && room.user2_id === profileId) ||
+        (room.user2_id === currentUserId && room.user1_id === profileId)
+    );
+  }
+
+  async function markDmRoomRead(roomId: string) {
+    if (!roomId || !currentUserId) return;
+
+    const room = dmRooms.find((item) => item.id === roomId);
+    if (!room) return;
+
+    const now = new Date().toISOString();
+    const readColumn =
+      room.user1_id === currentUserId
+        ? "user1_last_read_at"
+        : "user2_last_read_at";
+
+    const { error } = await supabase
+      .from("dm_rooms")
+      .update({ [readColumn]: now })
+      .eq("id", roomId);
+
+    if (error) {
+      showToast("DM okundu bilgisi güncellenemedi: " + error.message, "error");
+      return;
+    }
+
+    setDmRooms((prev) =>
+      prev.map((item) =>
+        item.id === roomId ? { ...item, [readColumn]: now } : item
+      )
+    );
+
+    setDmRoomSummaries((prev) => ({
+      ...prev,
+      [roomId]: {
+        lastMessage: prev[roomId]?.lastMessage || null,
+        unreadCount: 0,
+      },
+    }));
+  }
+
   function scrollDmToBottom(behavior: ScrollBehavior = "smooth") {
     setTimeout(() => {
       dmMessagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
@@ -1224,7 +1307,9 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
     const { data, error } = await supabase
       .from("dm_rooms")
-      .select("id, user1_id, user2_id, created_at, last_message_at")
+      .select(
+        "id, user1_id, user2_id, created_at, last_message_at, user1_last_read_at, user2_last_read_at"
+      )
       .or(`user1_id.eq.${currentUserId},user2_id.eq.${currentUserId}`)
       .order("last_message_at", { ascending: false });
 
@@ -1233,7 +1318,52 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       return;
     }
 
-    setDmRooms(data || []);
+    const rooms = (data || []) as DmRoom[];
+    setDmRooms(rooms);
+
+    if (rooms.length === 0) {
+      setDmRoomSummaries({});
+      return;
+    }
+
+    const roomIds = rooms.map((room) => room.id);
+
+    const { data: roomMessages, error: messagesError } = await supabase
+      .from("dm_messages")
+      .select("id, room_id, sender_id, content, created_at, edited_at")
+      .in("room_id", roomIds)
+      .order("created_at", { ascending: false })
+      .limit(1000);
+
+    if (messagesError) {
+      showToast("DM özetleri alınamadı: " + messagesError.message, "error");
+      return;
+    }
+
+    const messages = (roomMessages || []) as DmMessage[];
+    const nextSummaries: Record<string, DmRoomSummary> = {};
+
+    for (const room of rooms) {
+      const roomReadAt = getDmRoomReadAt(room);
+      const readTime = roomReadAt ? new Date(roomReadAt).getTime() : 0;
+      const messagesForRoom = messages.filter(
+        (message) => message.room_id === room.id
+      );
+
+      const lastMessage = messagesForRoom[0] || null;
+      const unreadCount = messagesForRoom.filter(
+        (message) =>
+          message.sender_id !== currentUserId &&
+          new Date(message.created_at).getTime() > readTime
+      ).length;
+
+      nextSummaries[room.id] = {
+        lastMessage,
+        unreadCount,
+      };
+    }
+
+    setDmRoomSummaries(nextSummaries);
   }
 
   async function getOrCreateDmRoom(profileId: string) {
@@ -1250,7 +1380,9 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
     const { data: existingRooms, error: roomSearchError } = await supabase
       .from("dm_rooms")
-      .select("id, user1_id, user2_id, created_at, last_message_at")
+      .select(
+        "id, user1_id, user2_id, created_at, last_message_at, user1_last_read_at, user2_last_read_at"
+      )
       .or(
         `and(user1_id.eq.${currentUserId},user2_id.eq.${profileId}),and(user1_id.eq.${profileId},user2_id.eq.${currentUserId})`
       )
@@ -1271,7 +1403,9 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           user1_id: currentUserId,
           user2_id: profileId,
         })
-        .select("id, user1_id, user2_id, created_at, last_message_at")
+        .select(
+        "id, user1_id, user2_id, created_at, last_message_at, user1_last_read_at, user2_last_read_at"
+      )
         .single();
 
       if (createRoomError) {
@@ -1279,7 +1413,9 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
         if (createRoomError.code === "23505") {
           const { data: retryRooms } = await supabase
             .from("dm_rooms")
-            .select("id, user1_id, user2_id, created_at, last_message_at")
+            .select(
+        "id, user1_id, user2_id, created_at, last_message_at, user1_last_read_at, user2_last_read_at"
+      )
             .or(
               `and(user1_id.eq.${currentUserId},user2_id.eq.${profileId}),and(user1_id.eq.${profileId},user2_id.eq.${currentUserId})`
             )
@@ -1320,7 +1456,12 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     setDmContent("");
     setActiveDmRoomId(null);
 
-    await getOrCreateDmRoom(profileId);
+    const roomId = await getOrCreateDmRoom(profileId);
+
+    if (roomId) {
+      await markDmRoomRead(roomId);
+      await getDmRooms();
+    }
 
     setTimeout(() => {
       dmInputRef.current?.focus();
@@ -1349,6 +1490,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     }
 
     setDmMessages(data || []);
+    await markDmRoomRead(roomId);
     scrollDmToBottom("auto");
   }
 
@@ -1385,6 +1527,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       });
     }
 
+    await markDmRoomRead(activeDmRoomId);
     await getDmRooms();
     scrollDmToBottom("smooth");
     dmInputRef.current?.focus();
@@ -1918,12 +2061,36 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
           getDmRooms();
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "dm_messages" },
+        async (payload: any) => {
+          const newMessage = payload.new as DmMessage;
+
+          await getDmRooms();
+
+          if (
+            newMessage.sender_id !== currentUserId &&
+            newMessage.room_id !== activeDmRoomId
+          ) {
+            playNotificationSound();
+          }
+
+          if (
+            newMessage.sender_id !== currentUserId &&
+            newMessage.room_id === activeDmRoomId &&
+            appView === "friends"
+          ) {
+            await markDmRoomRead(newMessage.room_id);
+          }
+        }
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(dmRoomsChannel);
     };
-  }, [currentUserId]);
+  }, [currentUserId, activeDmRoomId, appView]);
 
   useEffect(() => {
     if (!activeDmRoomId) return;
@@ -1951,6 +2118,14 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
             });
 
             scrollDmToBottom("smooth");
+
+            if (
+              newMessage.sender_id !== currentUserId &&
+              appView === "friends"
+            ) {
+              markDmRoomRead(newMessage.room_id);
+            }
+
             getDmRooms();
           }
 
@@ -1978,7 +2153,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     return () => {
       supabase.removeChannel(dmMessagesChannel);
     };
-  }, [activeDmRoomId]);
+  }, [activeDmRoomId, currentUserId, appView]);
 
   useEffect(() => {
     const hasXPost = messages.some((msg) => getFirstXPostLink(msg.content));
@@ -2298,44 +2473,99 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
             </div>
 
             <div className="mt-5 border-t border-white/10 pt-4">
-              <p className="mb-2 px-2 text-xs font-black text-gray-400">
-                DİREKT MESAJLAR
-              </p>
+              <div className="mb-2 flex items-center justify-between px-2">
+                <p className="text-xs font-black text-gray-400">
+                  DİREKT MESAJLAR
+                </p>
 
-              {friendProfiles.length === 0 ? (
+                {totalDmUnreadCount > 0 && (
+                  <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-black text-white">
+                    {totalDmUnreadCount > 99 ? "99+" : totalDmUnreadCount}
+                  </span>
+                )}
+              </div>
+
+              {dmListItems.length === 0 ? (
                 <p className="rounded-2xl bg-[#232428] p-3 text-xs text-gray-500">
-                  Henüz DM gösterecek arkadaşın yok.
+                  Henüz başlatılmış bir DM sohbetin yok.
                 </p>
               ) : (
-                <div className="zenco-scroll max-h-[320px] space-y-1 overflow-y-auto pr-1">
-                  {friendProfiles.map(({ profile }) => {
+                <div className="zenco-scroll max-h-[420px] space-y-1 overflow-y-auto pr-1">
+                  {dmListItems.map(({ room, profile, summary }) => {
                     if (!profile) return null;
 
                     const statusInfo = getProfileStatusInfo(profile);
+                    const lastMessage = summary.lastMessage;
+                    const isSelected = selectedDmProfileId === profile.id;
+                    const lastMessageText = lastMessage
+                      ? `${lastMessage.sender_id === currentUserId ? "Sen: " : ""}${lastMessage.content}`
+                      : "Sohbeti başlat";
 
                     return (
                       <button
-                        key={profile.id}
+                        key={room.id}
                         onClick={() => openDm(profile.id)}
-                        className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition ${
-                          selectedDmProfileId === profile.id
-                            ? "bg-indigo-600 text-white"
+                        className={`group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition ${
+                          isSelected
+                            ? "bg-indigo-600 text-white shadow-lg shadow-indigo-900/25"
+                            : summary.unreadCount > 0
+                            ? "bg-indigo-500/10 hover:bg-indigo-500/20 text-white"
                             : "hover:bg-[#36383f] text-gray-200"
                         }`}
                       >
-                        <Avatar
-                          username={profile.username}
-                          avatarUrl={profile.avatar_url}
-                          size="sm"
-                        />
+                        <div className="relative shrink-0">
+                          <Avatar
+                            username={profile.username}
+                            avatarUrl={profile.avatar_url}
+                            size="sm"
+                          />
+                          <span
+                            className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-[#2b2d31] ${statusInfo.dotClass}`}
+                          />
+                        </div>
 
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-black">
-                            {profile.username}
-                          </p>
-                          <p className={`truncate text-[11px] font-bold ${statusInfo.textClass}`}>
-                            {statusInfo.icon} {statusInfo.label}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p
+                              className={`min-w-0 flex-1 truncate text-sm ${
+                                summary.unreadCount > 0 ? "font-black" : "font-bold"
+                              }`}
+                            >
+                              {profile.username}
+                            </p>
+
+                            {lastMessage && (
+                              <span className="shrink-0 text-[10px] text-gray-400">
+                                {new Date(lastMessage.created_at).toLocaleTimeString(
+                                  "tr-TR",
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  }
+                                )}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="mt-0.5 flex items-center gap-2">
+                            <p
+                              className={`min-w-0 flex-1 truncate text-[11px] ${
+                                summary.unreadCount > 0
+                                  ? "font-bold text-gray-100"
+                                  : "text-gray-400"
+                              }`}
+                            >
+                              {lastMessageText}
+                            </p>
+
+                            {summary.unreadCount > 0 && (
+                              <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-black text-white shadow-lg shadow-red-900/30">
+                                {summary.unreadCount > 99
+                                  ? "99+"
+                                  : summary.unreadCount}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </button>
                     );
