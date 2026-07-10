@@ -1764,6 +1764,17 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   }, [activeServerId]);
 
   useEffect(() => {
+    if (appView !== "server" || !activeServerId || activeChannelId) return;
+
+    if (textChannels.length > 0) {
+      setActiveChannelId(textChannels[0].id);
+      return;
+    }
+
+    getChannels(activeServerId);
+  }, [appView, activeServerId, activeChannelId, textChannels]);
+
+  useEffect(() => {
     setUnreadCount(0);
     isNearBottomRef.current = true;
     getMessages();
