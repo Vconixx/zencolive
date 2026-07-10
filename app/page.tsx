@@ -73,6 +73,23 @@ type FriendRow = {
   created_at: string;
 };
 
+type DmRoom = {
+  id: string;
+  user1_id: string;
+  user2_id: string;
+  created_at: string;
+  last_message_at: string;
+};
+
+type DmMessage = {
+  id: number;
+  room_id: string;
+  sender_id: string;
+  content: string;
+  created_at: string;
+  edited_at: string | null;
+};
+
 function generateInviteCode() {
   return Math.random().toString(36).slice(2, 10).toUpperCase();
 }
@@ -350,6 +367,12 @@ export default function Home() {
   const [appView, setAppView] = useState<"server" | "friends">("server");
   const [friendsTab, setFriendsTab] = useState<"online" | "all" | "pending" | "add">("all");
   const [selectedDmProfileId, setSelectedDmProfileId] = useState<string | null>(null);
+  const [activeDmRoomId, setActiveDmRoomId] = useState<string | null>(null);
+  const [dmRooms, setDmRooms] = useState<DmRoom[]>([]);
+  const [dmMessages, setDmMessages] = useState<DmMessage[]>([]);
+  const [dmContent, setDmContent] = useState("");
+  const [dmLoading, setDmLoading] = useState(false);
+  const [dmSending, setDmSending] = useState(false);
   const [friendSearch, setFriendSearch] = useState("");
   const [friendSearchResults, setFriendSearchResults] = useState<Profile[]>([]);
   const [friendSearchLoading, setFriendSearchLoading] = useState(false);
@@ -417,6 +440,8 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
+  const dmMessagesEndRef = useRef<HTMLDivElement>(null);
+  const dmInputRef = useRef<HTMLInputElement>(null);
 
   const activeServer =
     servers.find((server) => server.id === activeServerId) || servers[0];
@@ -1188,6 +1213,183 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     });
   }
 
+  function scrollDmToBottom(behavior: ScrollBehavior = "smooth") {
+    setTimeout(() => {
+      dmMessagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
+    }, 60);
+  }
+
+  async function getDmRooms() {
+    if (!currentUserId) return;
+
+    const { data, error } = await supabase
+      .from("dm_rooms")
+      .select("id, user1_id, user2_id, created_at, last_message_at")
+      .or(`user1_id.eq.${currentUserId},user2_id.eq.${currentUserId}`)
+      .order("last_message_at", { ascending: false });
+
+    if (error) {
+      showToast("DM odaları alınamadı: " + error.message, "error");
+      return;
+    }
+
+    setDmRooms(data || []);
+  }
+
+  async function getOrCreateDmRoom(profileId: string) {
+    if (!currentUserId || !profileId || profileId === currentUserId) return null;
+
+    const relation = getFriendRelation(profileId);
+
+    if (!relation || relation.status !== "accepted") {
+      showToast("Özel mesaj göndermek için arkadaş olmanız gerekiyor.", "error");
+      return null;
+    }
+
+    setDmLoading(true);
+
+    const { data: existingRooms, error: roomSearchError } = await supabase
+      .from("dm_rooms")
+      .select("id, user1_id, user2_id, created_at, last_message_at")
+      .or(
+        `and(user1_id.eq.${currentUserId},user2_id.eq.${profileId}),and(user1_id.eq.${profileId},user2_id.eq.${currentUserId})`
+      )
+      .limit(1);
+
+    if (roomSearchError) {
+      setDmLoading(false);
+      showToast("DM odası açılamadı: " + roomSearchError.message, "error");
+      return null;
+    }
+
+    let room = existingRooms?.[0] as DmRoom | undefined;
+
+    if (!room) {
+      const { data: createdRoom, error: createRoomError } = await supabase
+        .from("dm_rooms")
+        .insert({
+          user1_id: currentUserId,
+          user2_id: profileId,
+        })
+        .select("id, user1_id, user2_id, created_at, last_message_at")
+        .single();
+
+      if (createRoomError) {
+        // İki taraf aynı anda açarsa unique index devreye girebilir.
+        if (createRoomError.code === "23505") {
+          const { data: retryRooms } = await supabase
+            .from("dm_rooms")
+            .select("id, user1_id, user2_id, created_at, last_message_at")
+            .or(
+              `and(user1_id.eq.${currentUserId},user2_id.eq.${profileId}),and(user1_id.eq.${profileId},user2_id.eq.${currentUserId})`
+            )
+            .limit(1);
+
+          room = retryRooms?.[0] as DmRoom | undefined;
+        } else {
+          setDmLoading(false);
+          showToast("DM odası oluşturulamadı: " + createRoomError.message, "error");
+          return null;
+        }
+      } else {
+        room = createdRoom as DmRoom;
+      }
+    }
+
+    if (!room) {
+      setDmLoading(false);
+      showToast("DM odası bulunamadı.", "error");
+      return null;
+    }
+
+    setActiveDmRoomId(room.id);
+    setDmRooms((prev) => {
+      const withoutRoom = prev.filter((item) => item.id !== room!.id);
+      return [room!, ...withoutRoom];
+    });
+    setDmLoading(false);
+
+    return room.id;
+  }
+
+  async function openDm(profileId: string) {
+    setAppView("friends");
+    setSelectedDmProfileId(profileId);
+    setFriendsTab("all");
+    setDmMessages([]);
+    setDmContent("");
+    setActiveDmRoomId(null);
+
+    await getOrCreateDmRoom(profileId);
+
+    setTimeout(() => {
+      dmInputRef.current?.focus();
+    }, 120);
+  }
+
+  async function getDmMessages(roomId: string) {
+    if (!roomId) {
+      setDmMessages([]);
+      return;
+    }
+
+    setDmLoading(true);
+
+    const { data, error } = await supabase
+      .from("dm_messages")
+      .select("id, room_id, sender_id, content, created_at, edited_at")
+      .eq("room_id", roomId)
+      .order("created_at", { ascending: true });
+
+    setDmLoading(false);
+
+    if (error) {
+      showToast("DM mesajları alınamadı: " + error.message, "error");
+      return;
+    }
+
+    setDmMessages(data || []);
+    scrollDmToBottom("auto");
+  }
+
+  async function sendDmMessage() {
+    const messageText = dmContent.trim();
+
+    if (!messageText || !activeDmRoomId || !currentUserId || dmSending) return;
+
+    setDmSending(true);
+
+    const { data, error } = await supabase
+      .from("dm_messages")
+      .insert({
+        room_id: activeDmRoomId,
+        sender_id: currentUserId,
+        content: messageText,
+      })
+      .select("id, room_id, sender_id, content, created_at, edited_at")
+      .single();
+
+    setDmSending(false);
+
+    if (error) {
+      showToast("DM gönderilemedi: " + error.message, "error");
+      return;
+    }
+
+    setDmContent("");
+
+    if (data) {
+      setDmMessages((prev) => {
+        if (prev.some((message) => message.id === data.id)) return prev;
+        return [...prev, data as DmMessage];
+      });
+    }
+
+    await getDmRooms();
+    scrollDmToBottom("smooth");
+    dmInputRef.current?.focus();
+  }
+
   async function logout() {
     await supabase.auth.signOut();
     router.push("/login");
@@ -1536,6 +1738,19 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   }, [currentUserId]);
 
   useEffect(() => {
+    if (currentUserId) getDmRooms();
+  }, [currentUserId]);
+
+  useEffect(() => {
+    if (!activeDmRoomId) {
+      setDmMessages([]);
+      return;
+    }
+
+    getDmMessages(activeDmRoomId);
+  }, [activeDmRoomId]);
+
+  useEffect(() => {
     if (activeServerId) {
       getChannels(activeServerId);
       setEditingId(null);
@@ -1679,6 +1894,80 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       clearInterval(fallbackInterval);
     };
   }, [currentUserId]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const dmRoomsChannel = supabase
+      .channel(`dm-rooms-live-${currentUserId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "dm_rooms" },
+        () => {
+          getDmRooms();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(dmRoomsChannel);
+    };
+  }, [currentUserId]);
+
+  useEffect(() => {
+    if (!activeDmRoomId) return;
+
+    const dmMessagesChannel = supabase
+      .channel(`dm-messages-live-${activeDmRoomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "dm_messages",
+          filter: `room_id=eq.${activeDmRoomId}`,
+        },
+        (payload: any) => {
+          if (payload.eventType === "INSERT") {
+            const newMessage = payload.new as DmMessage;
+
+            setDmMessages((prev) => {
+              if (prev.some((message) => message.id === newMessage.id)) {
+                return prev;
+              }
+
+              return [...prev, newMessage];
+            });
+
+            scrollDmToBottom("smooth");
+            getDmRooms();
+          }
+
+          if (payload.eventType === "UPDATE") {
+            const updatedMessage = payload.new as DmMessage;
+
+            setDmMessages((prev) =>
+              prev.map((message) =>
+                message.id === updatedMessage.id ? updatedMessage : message
+              )
+            );
+          }
+
+          if (payload.eventType === "DELETE") {
+            const deletedMessage = payload.old as DmMessage;
+
+            setDmMessages((prev) =>
+              prev.filter((message) => message.id !== deletedMessage.id)
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(dmMessagesChannel);
+    };
+  }, [activeDmRoomId]);
 
   useEffect(() => {
     const hasXPost = messages.some((msg) => getFirstXPostLink(msg.content));
@@ -2016,10 +2305,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                     return (
                       <button
                         key={profile.id}
-                        onClick={() => {
-                          setSelectedDmProfileId(profile.id);
-                          setFriendsTab("all");
-                        }}
+                        onClick={() => openDm(profile.id)}
                         className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition ${
                           selectedDmProfileId === profile.id
                             ? "bg-indigo-600 text-white"
@@ -2123,15 +2409,133 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                           </div>
                         </div>
 
-                        <div className="flex flex-1 items-center justify-center p-8 text-center">
-                          <div>
-                            <p className="text-5xl mb-4">💬</p>
-                            <h3 className="text-xl font-black">
-                              DM sohbeti bir sonraki adımda açılacak
-                            </h3>
-                            <p className="mt-2 max-w-md text-sm text-gray-400">
-                              Altyapı hazır. Sonraki adımda bu alana gerçek özel mesajlaşmayı bağlayacağız.
-                            </p>
+                        <div className="relative flex min-h-0 flex-1 flex-col">
+                          <div className="zenco-scroll flex-1 overflow-y-auto px-5 py-5">
+                            {dmLoading && dmMessages.length === 0 ? (
+                              <div className="flex h-full items-center justify-center">
+                                <div className="rounded-2xl border border-white/10 bg-[#232428] px-5 py-4 text-sm font-bold text-gray-300 shadow-xl">
+                                  DM yükleniyor...
+                                </div>
+                              </div>
+                            ) : dmMessages.length === 0 ? (
+                              <div className="flex h-full items-center justify-center text-center">
+                                <div>
+                                  <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-[28px] bg-indigo-600/15 text-4xl shadow-xl shadow-indigo-900/10">
+                                    👋
+                                  </div>
+                                  <h3 className="text-xl font-black">
+                                    {dmProfile.username} ile sohbetin başlangıcı
+                                  </h3>
+                                  <p className="mx-auto mt-2 max-w-md text-sm text-gray-400">
+                                    İlk özel mesajını gönder. Bu konuşmayı yalnızca siz görebilirsiniz.
+                                  </p>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {dmMessages.map((dmMessage) => {
+                                  const isMine = dmMessage.sender_id === currentUserId;
+                                  const senderProfile = isMine
+                                    ? profiles.find((profile) => profile.id === currentUserId)
+                                    : dmProfile;
+
+                                  return (
+                                    <div
+                                      key={dmMessage.id}
+                                      className={`flex items-end gap-2 ${
+                                        isMine ? "justify-end" : "justify-start"
+                                      }`}
+                                    >
+                                      {!isMine && (
+                                        <Avatar
+                                          username={senderProfile?.username || dmProfile.username}
+                                          avatarUrl={senderProfile?.avatar_url}
+                                          size="sm"
+                                        />
+                                      )}
+
+                                      <div
+                                        className={`max-w-[72%] rounded-3xl px-4 py-3 shadow-lg ${
+                                          isMine
+                                            ? "rounded-br-md bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-indigo-950/20"
+                                            : "rounded-bl-md border border-white/10 bg-[#2b2d31] text-gray-100 shadow-black/20"
+                                        }`}
+                                      >
+                                        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                                          {dmMessage.content}
+                                        </p>
+
+                                        <div
+                                          className={`mt-1.5 flex items-center gap-1 text-[10px] ${
+                                            isMine ? "justify-end text-indigo-100/70" : "text-gray-500"
+                                          }`}
+                                        >
+                                          <span>
+                                            {new Date(dmMessage.created_at).toLocaleTimeString(
+                                              "tr-TR",
+                                              {
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                              }
+                                            )}
+                                          </span>
+
+                                          {dmMessage.edited_at && <span>• düzenlendi</span>}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+
+                                <div ref={dmMessagesEndRef} />
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="border-t border-white/10 bg-[#1b1c20]/95 p-4 backdrop-blur-xl">
+                            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#383a40] p-2 shadow-xl focus-within:border-indigo-500/70 focus-within:ring-2 focus-within:ring-indigo-500/10">
+                              <button
+                                onClick={() =>
+                                  showToast("DM dosya gönderme sonraki adımda eklenecek.", "info")
+                                }
+                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#232428] text-xl transition hover:bg-indigo-600 hover:scale-105"
+                                title="Dosya ekle"
+                              >
+                                +
+                              </button>
+
+                              <input
+                                ref={dmInputRef}
+                                value={dmContent}
+                                onChange={(e) => setDmContent(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    sendDmMessage();
+                                  }
+                                }}
+                                placeholder={`${dmProfile.username} kişisine mesaj gönder...`}
+                                className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm outline-none placeholder:text-gray-500"
+                                maxLength={4000}
+                              />
+
+                              <span className="hidden text-xs text-gray-500 sm:block">
+                                {dmContent.length}/4000
+                              </span>
+
+                              <button
+                                onClick={sendDmMessage}
+                                disabled={
+                                  !dmContent.trim() ||
+                                  !activeDmRoomId ||
+                                  dmSending ||
+                                  dmLoading
+                                }
+                                className="h-10 rounded-xl bg-indigo-600 px-5 text-sm font-black shadow-lg shadow-indigo-950/30 transition hover:bg-indigo-700 hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+                              >
+                                {dmSending ? "Gönderiliyor..." : "Gönder"}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -2407,7 +2811,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                                     </button>
 
                                     <button
-                                      onClick={() => setSelectedDmProfileId(profile.id)}
+                                      onClick={() => openDm(profile.id)}
                                       className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black hover:bg-indigo-700 transition"
                                     >
                                       DM
@@ -3090,15 +3494,27 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                     )}
 
                     {getFriendButtonState(selectedProfile.id) === "accepted" && (
-                      <button
-                        onClick={() => {
-                          const relation = getFriendRelation(selectedProfile.id);
-                          if (relation) removeFriend(relation.id);
-                        }}
-                        className="w-full rounded-2xl bg-green-500/15 py-3 font-black text-green-200 hover:bg-red-600 hover:text-white transition"
-                      >
-                        ✅ Arkadaşsınız
-                      </button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => {
+                            setSelectedProfile(null);
+                            openDm(selectedProfile.id);
+                          }}
+                          className="rounded-2xl bg-indigo-600 py-3 font-black text-white hover:bg-indigo-700 transition"
+                        >
+                          💬 Mesaj
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            const relation = getFriendRelation(selectedProfile.id);
+                            if (relation) removeFriend(relation.id);
+                          }}
+                          className="rounded-2xl bg-green-500/15 py-3 font-black text-green-200 hover:bg-red-600 hover:text-white transition"
+                        >
+                          ✅ Arkadaş
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
