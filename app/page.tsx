@@ -381,6 +381,7 @@ export default function Home() {
   const [dmContent, setDmContent] = useState("");
   const [dmLoading, setDmLoading] = useState(false);
   const [dmSending, setDmSending] = useState(false);
+  const [otherUserTyping, setOtherUserTyping] = useState(false);
   const [friendSearch, setFriendSearch] = useState("");
   const [friendSearchResults, setFriendSearchResults] = useState<Profile[]>([]);
   const [friendSearchLoading, setFriendSearchLoading] = useState(false);
@@ -450,6 +451,8 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   const isNearBottomRef = useRef(true);
   const dmMessagesEndRef = useRef<HTMLDivElement>(null);
   const dmInputRef = useRef<HTMLInputElement>(null);
+  const dmTypingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dmTypingLastSentRef = useRef(false);
 
   const activeServer =
     servers.find((server) => server.id === activeServerId) || servers[0];
@@ -1318,6 +1321,59 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     }));
   }
 
+  async function setDmTypingState(isTyping: boolean) {
+    if (!activeDmRoomId || !currentUserId) return;
+
+    if (dmTypingLastSentRef.current === isTyping) return;
+
+    dmTypingLastSentRef.current = isTyping;
+
+    const { error } = await supabase.from("dm_typing").upsert(
+      {
+        room_id: activeDmRoomId,
+        user_id: currentUserId,
+        is_typing: isTyping,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: "room_id,user_id",
+      }
+    );
+
+    if (error) {
+      dmTypingLastSentRef.current = !isTyping;
+    }
+  }
+
+  function handleDmTyping(value: string) {
+    setDmContent(value);
+
+    if (!activeDmRoomId || !currentUserId) return;
+
+    if (dmTypingStopTimerRef.current) {
+      clearTimeout(dmTypingStopTimerRef.current);
+    }
+
+    if (value.trim()) {
+      setDmTypingState(true);
+
+      dmTypingStopTimerRef.current = setTimeout(() => {
+        setDmTypingState(false);
+      }, 2200);
+    } else {
+      setDmTypingState(false);
+    }
+  }
+
+  function stopDmTyping() {
+    if (dmTypingStopTimerRef.current) {
+      clearTimeout(dmTypingStopTimerRef.current);
+      dmTypingStopTimerRef.current = null;
+    }
+
+    setDmTypingState(false);
+  }
+
   function scrollDmToBottom(behavior: ScrollBehavior = "smooth") {
     setTimeout(() => {
       dmMessagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
@@ -1474,6 +1530,8 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     setAppView("friends");
     setSelectedDmProfileId(profileId);
     setFriendsTab("all");
+    stopDmTyping();
+    setOtherUserTyping(false);
     setDmMessages([]);
     setDmContent("");
     setActiveDmRoomId(null);
@@ -1521,6 +1579,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
     if (!messageText || !activeDmRoomId || !currentUserId || dmSending) return;
 
+    stopDmTyping();
     setDmSending(true);
 
     const { data, error } = await supabase
@@ -2176,6 +2235,74 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       supabase.removeChannel(dmMessagesChannel);
     };
   }, [activeDmRoomId, currentUserId, appView]);
+
+  useEffect(() => {
+    if (!activeDmRoomId || !currentUserId) {
+      setOtherUserTyping(false);
+      return;
+    }
+
+    const typingChannel = supabase
+      .channel(`dm-typing-live-${activeDmRoomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "dm_typing",
+          filter: `room_id=eq.${activeDmRoomId}`,
+        },
+        (payload: any) => {
+          const row = (payload.new || payload.old) as {
+            room_id: string;
+            user_id: string;
+            is_typing: boolean;
+            updated_at: string;
+          };
+
+          if (!row || row.user_id === currentUserId) return;
+
+          const isFresh =
+            row.updated_at &&
+            Date.now() - new Date(row.updated_at).getTime() < 5000;
+
+          setOtherUserTyping(Boolean(row.is_typing && isFresh));
+        }
+      )
+      .subscribe();
+
+    const fallbackInterval = setInterval(async () => {
+      const { data } = await supabase
+        .from("dm_typing")
+        .select("user_id, is_typing, updated_at")
+        .eq("room_id", activeDmRoomId)
+        .neq("user_id", currentUserId)
+        .maybeSingle();
+
+      if (!data) {
+        setOtherUserTyping(false);
+        return;
+      }
+
+      const isFresh =
+        Date.now() - new Date(data.updated_at).getTime() < 5000;
+
+      setOtherUserTyping(Boolean(data.is_typing && isFresh));
+    }, 1800);
+
+    return () => {
+      supabase.removeChannel(typingChannel);
+      clearInterval(fallbackInterval);
+
+      if (dmTypingStopTimerRef.current) {
+        clearTimeout(dmTypingStopTimerRef.current);
+        dmTypingStopTimerRef.current = null;
+      }
+
+      dmTypingLastSentRef.current = false;
+      setOtherUserTyping(false);
+    };
+  }, [activeDmRoomId, currentUserId]);
 
   useEffect(() => {
     const hasXPost = messages.some((msg) => getFirstXPostLink(msg.content));
@@ -2844,6 +2971,24 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                             )}
                           </div>
 
+                          <div className="shrink-0 bg-[#313338] px-6 pt-1">
+                            <div className="mx-auto min-h-6 w-full max-w-[1100px]">
+                              {otherUserTyping && (
+                                <div className="flex items-center gap-2 text-xs font-bold text-gray-300 animate-[fadeIn_0.15s_ease-out]">
+                                  <span className="flex items-center gap-1">
+                                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-indigo-400 [animation-delay:-0.3s]" />
+                                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-indigo-400 [animation-delay:-0.15s]" />
+                                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-indigo-400" />
+                                  </span>
+
+                                  <span>
+                                    {dmProfile.username} yazıyor...
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
                           <div className="shrink-0 border-t border-white/10 bg-[#2b2d31]/95 px-5 py-4 backdrop-blur-xl">
                             <div className="mx-auto flex w-full max-w-[1100px] items-center gap-3 rounded-2xl border border-white/10 bg-[#383a40] p-2 shadow-xl focus-within:border-indigo-500/70 focus-within:ring-2 focus-within:ring-indigo-500/10">
                               <button
@@ -2859,14 +3004,16 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                               <input
                                 ref={dmInputRef}
                                 value={dmContent}
-                                onChange={(e) => setDmContent(e.target.value)}
+                                onChange={(e) => handleDmTyping(e.target.value)}
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter" && !e.shiftKey) {
                                     e.preventDefault();
+                                    stopDmTyping();
                                     sendDmMessage();
                                   }
                                 }}
                                 placeholder={`${dmProfile.username} kişisine mesaj gönder...`}
+                                onBlur={stopDmTyping}
                                 className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm outline-none placeholder:text-gray-500"
                                 maxLength={4000}
                               />
