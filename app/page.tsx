@@ -95,6 +95,16 @@ type DmMessage = {
   content: string;
   created_at: string;
   edited_at: string | null;
+  reply_to_id: number | null;
+};
+
+type DmMessageReaction = {
+  id: string;
+  message_id: number;
+  room_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: string;
 };
 
 function generateInviteCode() {
@@ -378,9 +388,14 @@ export default function Home() {
   const [dmRooms, setDmRooms] = useState<DmRoom[]>([]);
   const [dmRoomSummaries, setDmRoomSummaries] = useState<Record<string, DmRoomSummary>>({});
   const [dmMessages, setDmMessages] = useState<DmMessage[]>([]);
+  const [dmMessageReactions, setDmMessageReactions] = useState<DmMessageReaction[]>([]);
   const [dmContent, setDmContent] = useState("");
   const [dmLoading, setDmLoading] = useState(false);
   const [dmSending, setDmSending] = useState(false);
+  const [dmReplyTo, setDmReplyTo] = useState<DmMessage | null>(null);
+  const [dmEditingId, setDmEditingId] = useState<number | null>(null);
+  const [dmEditingContent, setDmEditingContent] = useState("");
+  const [openDmReactionMessageId, setOpenDmReactionMessageId] = useState<number | null>(null);
   const [otherUserTyping, setOtherUserTyping] = useState(false);
   const [friendSearch, setFriendSearch] = useState("");
   const [friendSearchResults, setFriendSearchResults] = useState<Profile[]>([]);
@@ -1532,7 +1547,12 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     setFriendsTab("all");
     stopDmTyping();
     setOtherUserTyping(false);
+    setDmReplyTo(null);
+    setDmEditingId(null);
+    setDmEditingContent("");
+    setOpenDmReactionMessageId(null);
     setDmMessages([]);
+    setDmMessageReactions([]);
     setDmContent("");
     setActiveDmRoomId(null);
 
@@ -1548,6 +1568,252 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     }, 120);
   }
 
+  function getDmMessageById(messageId: number | null) {
+    if (!messageId) return null;
+    return dmMessages.find((message) => message.id === messageId) || null;
+  }
+
+  function getDmMessageSenderName(message: DmMessage | null) {
+    if (!message) return "Kullanıcı";
+
+    if (message.sender_id === currentUserId) {
+      return username || "Sen";
+    }
+
+    return (
+      profiles.find((profile) => profile.id === message.sender_id)?.username ||
+      "Kullanıcı"
+    );
+  }
+
+  function getDmShortContent(value: string) {
+    return value.length > 76 ? value.slice(0, 76) + "..." : value;
+  }
+
+  function getDmReactionsForMessage(messageId: number) {
+    return dmMessageReactions.filter(
+      (reaction) => reaction.message_id === messageId
+    );
+  }
+
+  function getGroupedDmReactions(messageId: number) {
+    const reactions = getDmReactionsForMessage(messageId);
+
+    return reactionEmojis
+      .map((emoji) => {
+        const emojiReactions = reactions.filter(
+          (reaction) => reaction.emoji === emoji
+        );
+
+        return {
+          emoji,
+          count: emojiReactions.length,
+          reactedByMe: emojiReactions.some(
+            (reaction) => reaction.user_id === currentUserId
+          ),
+        };
+      })
+      .filter((reaction) => reaction.count > 0);
+  }
+
+  async function getDmReactions(roomId: string) {
+    if (!roomId) {
+      setDmMessageReactions([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("dm_message_reactions")
+      .select("id, message_id, room_id, user_id, emoji, created_at")
+      .eq("room_id", roomId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      showToast("DM reaksiyonları alınamadı: " + error.message, "error");
+      return;
+    }
+
+    setDmMessageReactions(data || []);
+  }
+
+  async function toggleDmReaction(messageId: number, emoji: string) {
+    if (!currentUserId || !activeDmRoomId) return;
+
+    const myCurrentReaction = dmMessageReactions.find(
+      (reaction) =>
+        reaction.message_id === messageId &&
+        reaction.user_id === currentUserId
+    );
+
+    if (myCurrentReaction?.emoji === emoji) {
+      const { error } = await supabase
+        .from("dm_message_reactions")
+        .delete()
+        .eq("id", myCurrentReaction.id);
+
+      if (error) {
+        showToast("DM reaksiyonu kaldırılamadı: " + error.message, "error");
+        return;
+      }
+
+      setDmMessageReactions((prev) =>
+        prev.filter((reaction) => reaction.id !== myCurrentReaction.id)
+      );
+      setOpenDmReactionMessageId(null);
+      return;
+    }
+
+    if (myCurrentReaction) {
+      const { error: updateError } = await supabase
+        .from("dm_message_reactions")
+        .update({
+          emoji,
+          created_at: new Date().toISOString(),
+        })
+        .eq("id", myCurrentReaction.id);
+
+      if (updateError) {
+        showToast("DM reaksiyonu değiştirilemedi: " + updateError.message, "error");
+        return;
+      }
+
+      setDmMessageReactions((prev) =>
+        prev.map((reaction) =>
+          reaction.id === myCurrentReaction.id
+            ? { ...reaction, emoji, created_at: new Date().toISOString() }
+            : reaction
+        )
+      );
+
+      setOpenDmReactionMessageId(null);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("dm_message_reactions")
+      .insert({
+        message_id: messageId,
+        room_id: activeDmRoomId,
+        user_id: currentUserId,
+        emoji,
+      })
+      .select("id, message_id, room_id, user_id, emoji, created_at")
+      .single();
+
+    if (error) {
+      if (error.code === "23505") {
+        await getDmReactions(activeDmRoomId);
+        setOpenDmReactionMessageId(null);
+        return;
+      }
+
+      showToast("DM reaksiyonu eklenemedi: " + error.message, "error");
+      return;
+    }
+
+    if (data) {
+      setDmMessageReactions((prev) => [...prev, data]);
+    }
+
+    setOpenDmReactionMessageId(null);
+  }
+
+  function startDmReply(message: DmMessage) {
+    setDmReplyTo(message);
+    setDmEditingId(null);
+    setOpenDmReactionMessageId(null);
+
+    setTimeout(() => {
+      dmInputRef.current?.focus();
+    }, 50);
+  }
+
+  function startDmEdit(message: DmMessage) {
+    if (message.sender_id !== currentUserId) return;
+
+    setDmEditingId(message.id);
+    setDmEditingContent(message.content);
+    setDmReplyTo(null);
+    setOpenDmReactionMessageId(null);
+  }
+
+  function cancelDmEdit() {
+    setDmEditingId(null);
+    setDmEditingContent("");
+  }
+
+  async function saveDmEdit(message: DmMessage) {
+    if (message.sender_id !== currentUserId) return;
+
+    const nextContent = dmEditingContent.trim();
+
+    if (!nextContent) return;
+
+    const editedAt = new Date().toISOString();
+
+    const { error } = await supabase
+      .from("dm_messages")
+      .update({
+        content: nextContent,
+        edited_at: editedAt,
+      })
+      .eq("id", message.id)
+      .eq("sender_id", currentUserId);
+
+    if (error) {
+      showToast("DM düzenlenemedi: " + error.message, "error");
+      return;
+    }
+
+    setDmMessages((prev) =>
+      prev.map((item) =>
+        item.id === message.id
+          ? { ...item, content: nextContent, edited_at: editedAt }
+          : item
+      )
+    );
+
+    cancelDmEdit();
+    showToast("DM düzenlendi.", "success");
+  }
+
+  function deleteDmMessage(message: DmMessage) {
+    if (message.sender_id !== currentUserId) return;
+
+    openConfirm({
+      title: "DM mesajı silinsin mi?",
+      description: "Bu özel mesaj kalıcı olarak silinecek.",
+      confirmText: "Mesajı Sil",
+      danger: true,
+      onConfirm: async () => {
+        const { error } = await supabase
+          .from("dm_messages")
+          .delete()
+          .eq("id", message.id)
+          .eq("sender_id", currentUserId);
+
+        if (error) {
+          showToast("DM silinemedi: " + error.message, "error");
+          return;
+        }
+
+        setDmMessages((prev) =>
+          prev.filter((item) => item.id !== message.id)
+        );
+
+        setDmMessageReactions((prev) =>
+          prev.filter((reaction) => reaction.message_id !== message.id)
+        );
+
+        if (dmReplyTo?.id === message.id) {
+          setDmReplyTo(null);
+        }
+
+        showToast("DM silindi.", "success");
+      },
+    });
+  }
+
   async function getDmMessages(roomId: string) {
     if (!roomId) {
       setDmMessages([]);
@@ -1558,7 +1824,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
     const { data, error } = await supabase
       .from("dm_messages")
-      .select("id, room_id, sender_id, content, created_at, edited_at")
+      .select("id, room_id, sender_id, content, created_at, edited_at, reply_to_id")
       .eq("room_id", roomId)
       .order("created_at", { ascending: true });
 
@@ -1570,6 +1836,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     }
 
     setDmMessages(data || []);
+    await getDmReactions(roomId);
     await markDmRoomRead(roomId);
     scrollDmToBottom("auto");
   }
@@ -1588,8 +1855,9 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
         room_id: activeDmRoomId,
         sender_id: currentUserId,
         content: messageText,
+        reply_to_id: dmReplyTo?.id || null,
       })
-      .select("id, room_id, sender_id, content, created_at, edited_at")
+      .select("id, room_id, sender_id, content, created_at, edited_at, reply_to_id")
       .single();
 
     setDmSending(false);
@@ -1600,6 +1868,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     }
 
     setDmContent("");
+    setDmReplyTo(null);
 
     if (data) {
       setDmMessages((prev) => {
@@ -2235,6 +2504,60 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       supabase.removeChannel(dmMessagesChannel);
     };
   }, [activeDmRoomId, currentUserId, appView]);
+
+  useEffect(() => {
+    if (!activeDmRoomId) return;
+
+    const dmReactionsChannel = supabase
+      .channel(`dm-reactions-live-${activeDmRoomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "dm_message_reactions",
+          filter: `room_id=eq.${activeDmRoomId}`,
+        },
+        (payload: any) => {
+          if (payload.eventType === "INSERT") {
+            const newReaction = payload.new as DmMessageReaction;
+
+            setDmMessageReactions((prev) => {
+              if (prev.some((reaction) => reaction.id === newReaction.id)) {
+                return prev;
+              }
+
+              return [...prev, newReaction];
+            });
+          }
+
+          if (payload.eventType === "UPDATE") {
+            const updatedReaction = payload.new as DmMessageReaction;
+
+            setDmMessageReactions((prev) =>
+              prev.map((reaction) =>
+                reaction.id === updatedReaction.id
+                  ? updatedReaction
+                  : reaction
+              )
+            );
+          }
+
+          if (payload.eventType === "DELETE") {
+            const deletedReaction = payload.old as DmMessageReaction;
+
+            setDmMessageReactions((prev) =>
+              prev.filter((reaction) => reaction.id !== deletedReaction.id)
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(dmReactionsChannel);
+    };
+  }, [activeDmRoomId]);
 
   useEffect(() => {
     if (!activeDmRoomId || !currentUserId) {
@@ -2898,11 +3221,17 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                                   const senderProfile = isMine
                                     ? profiles.find((profile) => profile.id === currentUserId)
                                     : dmProfile;
+                                  const repliedMessage = getDmMessageById(
+                                    dmMessage.reply_to_id
+                                  );
+                                  const groupedDmReactions =
+                                    getGroupedDmReactions(dmMessage.id);
+                                  const isEditing = dmEditingId === dmMessage.id;
 
                                   return (
                                     <div
                                       key={dmMessage.id}
-                                      className={`flex items-end gap-2 ${
+                                      className={`group relative flex items-end gap-2 rounded-2xl px-2 py-1.5 transition-all duration-200 hover:bg-white/[0.025] ${
                                         isMine ? "justify-end" : "justify-start"
                                       }`}
                                     >
@@ -2915,52 +3244,235 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                                       )}
 
                                       <div
-                                        className={`max-w-[72%] rounded-3xl px-4 py-3 shadow-lg ${
-                                          isMine
-                                            ? "rounded-br-md bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-indigo-950/20"
-                                            : "rounded-bl-md border border-white/10 bg-[#2b2d31] text-gray-100 shadow-black/20"
-                                        }`}
+                                        className={`relative max-w-[72%] ${
+                                          isMine ? "items-end" : "items-start"
+                                        } flex flex-col`}
                                       >
-                                        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                                          {dmMessage.content}
-                                        </p>
-
                                         <div
-                                          className={`mt-1.5 flex items-center gap-1 text-[10px] ${
-                                            isMine
-                                              ? "justify-end text-indigo-100/70"
-                                              : "text-gray-500"
+                                          className={`pointer-events-none absolute -top-5 z-30 flex translate-y-1 items-center gap-1 rounded-xl border border-white/10 bg-[#17181c]/95 p-1 opacity-0 shadow-2xl backdrop-blur-xl transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 ${
+                                            isMine ? "right-2" : "left-2"
                                           }`}
                                         >
-                                          <span>
-                                            {new Date(dmMessage.created_at).toLocaleTimeString(
-                                              "tr-TR",
-                                              {
-                                                hour: "2-digit",
-                                                minute: "2-digit",
-                                              }
-                                            )}
-                                          </span>
+                                          <button
+                                            onClick={() =>
+                                              setOpenDmReactionMessageId((prev) =>
+                                                prev === dmMessage.id
+                                                  ? null
+                                                  : dmMessage.id
+                                              )
+                                            }
+                                            className="flex h-8 w-8 items-center justify-center rounded-lg text-sm transition hover:bg-indigo-600/30 hover:scale-110"
+                                            title="Reaksiyon"
+                                          >
+                                            😊
+                                          </button>
 
-                                          {dmMessage.edited_at && <span>• düzenlendi</span>}
+                                          <button
+                                            onClick={() => startDmReply(dmMessage)}
+                                            className="flex h-8 w-8 items-center justify-center rounded-lg text-sm transition hover:bg-indigo-600/30 hover:scale-110"
+                                            title="Yanıtla"
+                                          >
+                                            ↩️
+                                          </button>
 
                                           {isMine && (
                                             <>
-                                              <span>•</span>
-                                              <span
-                                                className={`transition-colors duration-300 ${
-                                                  isDmMessageSeen(dmMessage)
-                                                    ? "font-black text-green-200"
-                                                    : "font-bold text-indigo-100/70"
-                                                }`}
+                                              <button
+                                                onClick={() => startDmEdit(dmMessage)}
+                                                className="flex h-8 w-8 items-center justify-center rounded-lg text-sm transition hover:bg-indigo-600/30 hover:scale-110"
+                                                title="Düzenle"
                                               >
-                                                {isDmMessageSeen(dmMessage)
-                                                  ? "✓✓ Görüldü"
-                                                  : "✓ Gönderildi"}
-                                              </span>
+                                                ✏️
+                                              </button>
+
+                                              <button
+                                                onClick={() => deleteDmMessage(dmMessage)}
+                                                className="flex h-8 w-8 items-center justify-center rounded-lg text-sm transition hover:bg-red-500/25 hover:scale-110"
+                                                title="Sil"
+                                              >
+                                                🗑️
+                                              </button>
                                             </>
                                           )}
                                         </div>
+
+                                        {openDmReactionMessageId === dmMessage.id && (
+                                          <div
+                                            className={`absolute -top-16 z-50 rounded-2xl border border-white/10 bg-[#17181c]/95 p-2 shadow-2xl backdrop-blur-xl ${
+                                              isMine ? "right-0" : "left-0"
+                                            }`}
+                                          >
+                                            <div className="flex items-center gap-1">
+                                              {reactionEmojis.map((emoji) => (
+                                                <button
+                                                  key={emoji}
+                                                  onClick={() =>
+                                                    toggleDmReaction(
+                                                      dmMessage.id,
+                                                      emoji
+                                                    )
+                                                  }
+                                                  className="flex h-10 w-10 items-center justify-center rounded-xl text-xl transition-all duration-150 hover:bg-indigo-600/25 hover:scale-125 active:scale-95"
+                                                  title={`${emoji} reaksiyonu`}
+                                                >
+                                                  {emoji}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        <div
+                                          className={`w-full rounded-3xl px-4 py-3 shadow-lg transition-all duration-200 group-hover:-translate-y-0.5 ${
+                                            isMine
+                                              ? "rounded-br-md bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-indigo-950/20 group-hover:shadow-indigo-900/35"
+                                              : "rounded-bl-md border border-white/10 bg-[#2b2d31] text-gray-100 shadow-black/20 group-hover:border-indigo-400/20"
+                                          }`}
+                                        >
+                                          {repliedMessage && (
+                                            <button
+                                              onClick={() => {
+                                                document
+                                                  .getElementById(
+                                                    `dm-message-${repliedMessage.id}`
+                                                  )
+                                                  ?.scrollIntoView({
+                                                    behavior: "smooth",
+                                                    block: "center",
+                                                  });
+                                              }}
+                                              className={`mb-2 w-full rounded-2xl border-l-4 px-3 py-2 text-left transition hover:brightness-110 ${
+                                                isMine
+                                                  ? "border-indigo-200 bg-black/15"
+                                                  : "border-indigo-500 bg-[#202126]"
+                                              }`}
+                                            >
+                                              <p className="text-xs font-black text-indigo-200">
+                                                {getDmMessageSenderName(repliedMessage)}
+                                              </p>
+                                              <p className="truncate text-xs text-gray-300">
+                                                {getDmShortContent(repliedMessage.content)}
+                                              </p>
+                                            </button>
+                                          )}
+
+                                          <div id={`dm-message-${dmMessage.id}`}>
+                                            {isEditing ? (
+                                              <div className="space-y-2">
+                                                <input
+                                                  autoFocus
+                                                  value={dmEditingContent}
+                                                  onChange={(e) =>
+                                                    setDmEditingContent(
+                                                      e.target.value
+                                                    )
+                                                  }
+                                                  onKeyDown={(e) => {
+                                                    if (e.key === "Enter") {
+                                                      e.preventDefault();
+                                                      saveDmEdit(dmMessage);
+                                                    }
+
+                                                    if (e.key === "Escape") {
+                                                      cancelDmEdit();
+                                                    }
+                                                  }}
+                                                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm outline-none focus:border-indigo-300"
+                                                  maxLength={4000}
+                                                />
+
+                                                <div className="flex justify-end gap-2 text-xs">
+                                                  <button
+                                                    onClick={cancelDmEdit}
+                                                    className="rounded-lg bg-black/20 px-3 py-1.5 font-bold hover:bg-black/30"
+                                                  >
+                                                    Vazgeç
+                                                  </button>
+                                                  <button
+                                                    onClick={() =>
+                                                      saveDmEdit(dmMessage)
+                                                    }
+                                                    className="rounded-lg bg-white/20 px-3 py-1.5 font-black hover:bg-white/30"
+                                                  >
+                                                    Kaydet
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            ) : (
+                                              <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                                                {dmMessage.content}
+                                              </p>
+                                            )}
+                                          </div>
+
+                                          <div
+                                            className={`mt-1.5 flex items-center gap-1 text-[10px] ${
+                                              isMine
+                                                ? "justify-end text-indigo-100/70"
+                                                : "text-gray-500"
+                                            }`}
+                                          >
+                                            <span>
+                                              {new Date(
+                                                dmMessage.created_at
+                                              ).toLocaleTimeString("tr-TR", {
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                              })}
+                                            </span>
+
+                                            {dmMessage.edited_at && (
+                                              <span>• düzenlendi</span>
+                                            )}
+
+                                            {isMine && (
+                                              <>
+                                                <span>•</span>
+                                                <span
+                                                  className={`transition-colors duration-300 ${
+                                                    isDmMessageSeen(dmMessage)
+                                                      ? "font-black text-green-200"
+                                                      : "font-bold text-indigo-100/70"
+                                                  }`}
+                                                >
+                                                  {isDmMessageSeen(dmMessage)
+                                                    ? "✓✓ Görüldü"
+                                                    : "✓ Gönderildi"}
+                                                </span>
+                                              </>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        {groupedDmReactions.length > 0 && (
+                                          <div
+                                            className={`mt-1 flex flex-wrap gap-1.5 ${
+                                              isMine
+                                                ? "justify-end"
+                                                : "justify-start"
+                                            }`}
+                                          >
+                                            {groupedDmReactions.map((reaction) => (
+                                              <button
+                                                key={reaction.emoji}
+                                                onClick={() =>
+                                                  toggleDmReaction(
+                                                    dmMessage.id,
+                                                    reaction.emoji
+                                                  )
+                                                }
+                                                className={`flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-black shadow-md transition hover:scale-105 ${
+                                                  reaction.reactedByMe
+                                                    ? "border-indigo-400 bg-indigo-500/25 text-white"
+                                                    : "border-white/10 bg-[#232428] text-gray-200 hover:border-indigo-500/50"
+                                                }`}
+                                              >
+                                                <span>{reaction.emoji}</span>
+                                                <span>{reaction.count}</span>
+                                              </button>
+                                            ))}
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
                                   );
@@ -2970,6 +3482,33 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                               </div>
                             )}
                           </div>
+
+                          {dmReplyTo && (
+                            <div className="shrink-0 bg-[#313338] px-6 pt-2">
+                              <div className="mx-auto flex w-full max-w-[1100px] items-center gap-3 rounded-2xl border border-indigo-400/20 bg-[#25262c] px-4 py-2 shadow-lg">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-sm">
+                                  ↩️
+                                </div>
+
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-xs font-black text-indigo-300">
+                                    {getDmMessageSenderName(dmReplyTo)}
+                                  </p>
+                                  <p className="truncate text-xs text-gray-400">
+                                    {getDmShortContent(dmReplyTo.content)}
+                                  </p>
+                                </div>
+
+                                <button
+                                  onClick={() => setDmReplyTo(null)}
+                                  className="flex h-8 w-8 items-center justify-center rounded-xl text-gray-400 transition hover:bg-red-500/15 hover:text-red-300"
+                                  title="Yanıtı iptal et"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                          )}
 
                           <div className="shrink-0 bg-[#313338] px-6 pt-1">
                             <div className="mx-auto min-h-6 w-full max-w-[1100px]">
