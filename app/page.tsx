@@ -2370,20 +2370,43 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
       confirmText: "Sunucuyu Sil",
       danger: true,
       onConfirm: async () => {
-        const { error } = await supabase
+        const serverIdToDelete = activeServer.id;
+
+        const { data: deletedServers, error } = await supabase
           .from("servers")
           .delete()
-          .eq("id", activeServer.id);
+          .eq("id", serverIdToDelete)
+          .eq("owner_id", currentUserId)
+          .select("id");
 
         if (error) {
-          showToast("Sunucu silinemedi.", "error");
+          showToast("Sunucu silinemedi: " + error.message, "error");
           return;
         }
 
-        showToast("Sunucu silindi.", "success");
-        setActiveServerId("");
+        if (!deletedServers || deletedServers.length === 0) {
+          showToast(
+            "Sunucu silinemedi. Supabase DELETE yetkisini kontrol et.",
+            "error"
+          );
+          return;
+        }
+
+        const remainingServers = servers.filter(
+          (server) => server.id !== serverIdToDelete
+        );
+
+        setServers(remainingServers);
+        setActiveServerId(remainingServers[0]?.id || "");
         setActiveChannelId("");
+        setTextChannels([]);
+        setVoiceChannels([]);
         setMessages([]);
+        setMessageReactions([]);
+        setPinnedPanelOpen(false);
+
+        showToast("Sunucu silindi.", "success");
+
         await getServers();
       },
     });
