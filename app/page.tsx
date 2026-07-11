@@ -528,6 +528,33 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     0
   );
 
+  const activeDmRoom =
+    dmRooms.find((room) => room.id === activeDmRoomId) || null;
+
+  const lastOwnDmMessage =
+    [...dmMessages]
+      .reverse()
+      .find((message) => message.sender_id === currentUserId) || null;
+
+  function getOtherUserDmReadAt(room?: DmRoom | null) {
+    if (!room) return null;
+
+    return room.user1_id === currentUserId
+      ? room.user2_last_read_at
+      : room.user1_last_read_at;
+  }
+
+  function isDmMessageSeen(message: DmMessage) {
+    const otherUserReadAt = getOtherUserDmReadAt(activeDmRoom);
+
+    if (!otherUserReadAt) return false;
+
+    return (
+      new Date(otherUserReadAt).getTime() >=
+      new Date(message.created_at).getTime()
+    );
+  }
+
   const canManageChannels =
     !!activeServer && activeServer.owner_id === currentUserId;
 
@@ -2755,7 +2782,9 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
                                         <div
                                           className={`mt-1.5 flex items-center gap-1 text-[10px] ${
-                                            isMine ? "justify-end text-indigo-100/70" : "text-gray-500"
+                                            isMine
+                                              ? "justify-end text-indigo-100/70"
+                                              : "text-gray-500"
                                           }`}
                                         >
                                           <span>
@@ -2769,6 +2798,24 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                                           </span>
 
                                           {dmMessage.edited_at && <span>• düzenlendi</span>}
+
+                                          {isMine &&
+                                            lastOwnDmMessage?.id === dmMessage.id && (
+                                              <>
+                                                <span>•</span>
+                                                <span
+                                                  className={
+                                                    isDmMessageSeen(dmMessage)
+                                                      ? "font-black text-green-200"
+                                                      : "font-bold text-indigo-100/70"
+                                                  }
+                                                >
+                                                  {isDmMessageSeen(dmMessage)
+                                                    ? "✓✓ Görüldü"
+                                                    : "✓ Gönderildi"}
+                                                </span>
+                                              </>
+                                            )}
                                         </div>
                                       </div>
                                     </div>
