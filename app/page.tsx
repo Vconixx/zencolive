@@ -465,6 +465,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
   const dmMessagesEndRef = useRef<HTMLDivElement>(null);
+  const dmMessagesContainerRef = useRef<HTMLDivElement>(null);
   const dmInputRef = useRef<HTMLInputElement>(null);
   const dmTypingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dmTypingLastSentRef = useRef(false);
@@ -1390,9 +1391,23 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
   }
 
   function scrollDmToBottom(behavior: ScrollBehavior = "smooth") {
-    setTimeout(() => {
-      dmMessagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
-    }, 60);
+    const forceBottom = () => {
+      const container = dmMessagesContainerRef.current;
+
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+
+      dmMessagesEndRef.current?.scrollIntoView({
+        behavior,
+        block: "end",
+      });
+    };
+
+    requestAnimationFrame(forceBottom);
+    setTimeout(forceBottom, 80);
+    setTimeout(forceBottom, 250);
+    setTimeout(forceBottom, 700);
   }
 
   async function getDmRooms() {
@@ -1561,6 +1576,9 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
     if (roomId) {
       await markDmRoomRead(roomId);
       await getDmRooms();
+
+      setTimeout(() => scrollDmToBottom("auto"), 120);
+      setTimeout(() => scrollDmToBottom("auto"), 500);
     }
 
     setTimeout(() => {
@@ -3193,7 +3211,10 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                         </div>
 
                         <div className="relative flex min-h-0 flex-1 flex-col">
-                          <div className="zenco-scroll flex-1 overflow-y-auto px-6 py-5">
+                          <div
+                            ref={dmMessagesContainerRef}
+                            className="zenco-scroll flex-1 overflow-y-auto px-6 py-5"
+                          >
                             {dmLoading && dmMessages.length === 0 ? (
                               <div className="flex h-full items-center justify-center">
                                 <div className="rounded-2xl border border-white/10 bg-[#232428] px-5 py-4 text-sm font-bold text-gray-300 shadow-xl">
@@ -3249,7 +3270,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
                                         } flex flex-col`}
                                       >
                                         <div
-                                          className={`pointer-events-none absolute -top-5 z-30 flex translate-y-1 items-center gap-1 rounded-xl border border-white/10 bg-[#17181c]/95 p-1 opacity-0 shadow-2xl backdrop-blur-xl transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 ${
+                                          className={`pointer-events-none absolute -top-11 z-30 flex translate-y-1 items-center gap-1 rounded-xl border border-white/10 bg-[#17181c]/95 p-1 opacity-0 shadow-2xl backdrop-blur-xl transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 ${
                                             isMine ? "right-2" : "left-2"
                                           }`}
                                         >
@@ -3298,7 +3319,7 @@ function showToast(message: string, type: "success" | "error" | "info" = "succes
 
                                         {openDmReactionMessageId === dmMessage.id && (
                                           <div
-                                            className={`absolute -top-16 z-50 rounded-2xl border border-white/10 bg-[#17181c]/95 p-2 shadow-2xl backdrop-blur-xl ${
+                                            className={`absolute -top-24 z-50 rounded-2xl border border-white/10 bg-[#17181c]/95 p-2 shadow-2xl backdrop-blur-xl ${
                                               isMine ? "right-0" : "left-0"
                                             }`}
                                           >
